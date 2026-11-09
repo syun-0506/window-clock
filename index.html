@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<title>3D Window Clock</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; color:#eee; }
+  #c { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #video { position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+  #hud { position:fixed; left:0; top:0; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 6px calc(env(safe-area-inset-left, 0px) + 10px); font-size:11px; color:#9a9; background:rgba(0,0,0,.35); border-radius:0 0 8px 0; pointer-events:none; white-space:pre-line; max-width:70vw; }
+  #hud.err { color:#f88; }
+  .ui-hidden #hud, .ui-hidden #gear, .ui-hidden #bar { display:none; }
+  #gear { position:fixed; right: calc(env(safe-area-inset-right, 0px) + 10px); top: calc(env(safe-area-inset-top, 0px) + 8px); width:40px; height:40px; border-radius:50%; background:rgba(20,20,20,.7); border:1px solid #444; color:#ddd; font-size:20px; line-height:40px; text-align:center; cursor:pointer; user-select:none; }
+  #bar { position:fixed; left:0; right:0; bottom:0; padding:6px calc(env(safe-area-inset-right,0px)+10px) calc(env(safe-area-inset-bottom,0px)+8px) calc(env(safe-area-inset-left,0px)+10px); display:flex; gap:8px; align-items:center; background:linear-gradient(transparent, rgba(0,0,0,.6)); }
+  #bar input[type=range] { flex:1; }
+  #bar label { font-size:11px; color:#aaa; white-space:nowrap; }
+  #bar button { background:#345; color:#fff; border:0; border-radius:6px; padding:6px 10px; font-size:12px; }
+  #panel { position:fixed; right:0; top:0; bottom:0; width:min(92vw, 360px); background:rgba(14,14,16,.96); border-left:1px solid #333; overflow-y:auto; padding: calc(env(safe-area-inset-top,0px)+12px) 14px calc(env(safe-area-inset-bottom,0px)+24px); box-sizing:border-box; transform:translateX(100%); transition:transform .25s; z-index:10; -webkit-overflow-scrolling:touch; }
+  #panel.open { transform:translateX(0); }
+  #panel h2 { font-size:15px; margin:14px 0 6px; color:#fff; border-bottom:1px solid #333; padding-bottom:4px; }
+  #panel h2:first-child { margin-top:0; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0; font-size:13px; }
+  .row label { flex:0 0 42%; color:#ccc; }
+  .row input[type=range] { flex:1; min-width:0; }
+  .row select, .row input[type=file] { flex:1; min-width:0; background:#222; color:#eee; border:1px solid #444; border-radius:4px; padding:4px; font-size:13px; }
+  .row .val { flex:0 0 52px; text-align:right; font-variant-numeric:tabular-nums; color:#9cf; font-size:12px; }
+  .row input[type=checkbox] { width:20px; height:20px; }
+  button.btn { background:#2a4; color:#fff; border:0; border-radius:6px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  button.btn.sec { background:#444; }
+  .note { font-size:11px; color:#888; line-height:1.5; margin:6px 0; }
+  .close { float:right; background:none; border:0; color:#aaa; font-size:20px; cursor:pointer; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js",
+    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/vision_bundle.mjs"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="video" playsinline muted autoplay></video>
+<div id="hud">起動中…</div>
+<div id="gear" title="設定">⚙</div>
+<div id="bar">
+  <label>視点 左</label><input id="eyeX" type="range" min="-30" max="30" step="0.5" value="0"><label>右</label>
+  <button id="waveBtn" title="手を振るテスト">👋</button>
+</div>
+
+<div id="panel">
+  <button class="close" id="closePanel">✕</button>
+  <h2>視点の取り方</h2>
+  <div class="row"><label>モード</label>
+    <select id="mode">
+      <option value="slider">視点スライダー（カメラ不使用）</option>
+      <option value="face">顔追跡（インカメラ）</option>
+    </select></div>
+  <div class="row"><label>自動で左右に揺らす</label><input id="autoSway" type="checkbox"></div>
+  <div class="row"><label>視点の高さ</label><input id="eyeY" type="range" min="-30" max="30" step="0.5" value="0"><span class="val" id="eyeYv"></span></div>
+  <div class="row"><label>視点までの距離</label><input id="eyeZ" type="range" min="25" max="120" step="1" value="55"><span class="val" id="eyeZv"></span></div>
+  <div class="note">顔追跡・手振り検出は https で開いたページでのみ動作します（ブラウザの仕様）。カメラ映像は端末内で処理し、送信しません。</div>
+  <div class="row"><label>手を振ったら振り返す</label><input id="waveDetect" type="checkbox" checked></div>
+  <div class="row"><label>左右反転</label><input id="mirror" type="checkbox"></div>
+  <div class="row"><label>カメラ水平画角(°)</label><input id="hfov" type="range" min="40" max="100" step="1" value="65"><span class="val" id="hfovv"></span></div>
+  <div class="row"><label>瞳孔間距離(mm)</label><input id="ipd" type="range" min="55" max="72" step="0.5" value="63"><span class="val" id="ipdv"></span></div>
+  <div class="row"><label>追従の滑らかさ</label><input id="smooth" type="range" min="0.05" max="0.9" step="0.05" value="0.3"><span class="val" id="smoothv"></span></div>
+
+  <h2>端末・設置</h2>
+  <div class="row"><label>画面の対角(インチ)</label><input id="diag" type="range" min="4" max="13" step="0.1" value="6.5"><span class="val" id="diagv"></span></div>
+  <div class="row"><label>傾きセンサーで床を水平に</label><input id="useTilt" type="checkbox"></div>
+  <div class="row"><label>設置角 手動(°)</label><input id="tiltManual" type="range" min="30" max="90" step="1" value="90"><span class="val" id="tiltManualv"></span></div>
+  <div class="row"><label>黒枠の幅(mm)</label><input id="frame" type="range" min="0" max="15" step="0.5" value="4"><span class="val" id="framev"></span></div>
+
+  <h2>部屋</h2>
+  <div class="row"><label>奥行き(×画面幅)</label><input id="depth" type="range" min="0.4" max="3" step="0.05" value="1.4"><span class="val" id="depthv"></span></div>
+  <div class="row"><label>床・壁</label>
+    <select id="roomStyle">
+      <option value="wood">木の床・白壁</option>
+      <option value="tatami">和室</option>
+      <option value="night">夜の部屋</option>
+      <option value="grid">青いグリッド</option>
+    </select></div>
+  <div class="row"><label>照明の強さ</label><input id="light" type="range" min="0.2" max="3" step="0.05" value="1"><span class="val" id="lightv"></span></div>
+  <div class="row"><label>照明の向き(°)</label><input id="lightDir" type="range" min="-180" max="180" step="5" value="-40"><span class="val" id="lightDirv"></span></div>
+
+  <h2>時計</h2>
+  <div class="row"><label>置き場所</label>
+    <select id="clockPlace">
+      <option value="board">アバターが持つボード</option>
+      <option value="float">空中に浮かせる</option>
+    </select></div>
+  <div class="row"><label>種類</label>
+    <select id="clockStyle">
+      <option value="digital">Digital</option>
+      <option value="neon">Neon</option>
+      <option value="analog">Analog</option>
+      <option value="minimal">Minimal</option>
+    </select></div>
+  <div class="row"><label>日付を表示</label><input id="showDate" type="checkbox" checked></div>
+  <div class="row"><label>ボードの大きさ</label><input id="boardSize" type="range" min="0.2" max="0.6" step="0.01" value="0.4"><span class="val" id="boardSizev"></span></div>
+  <div class="row"><label>（空中）大きさ</label><input id="clockSize" type="range" min="0.2" max="1" step="0.02" value="0.5"><span class="val" id="clockSizev"></span></div>
+  <div class="row"><label>（空中）前後</label><input id="clockZ" type="range" min="-1" max="0.3" step="0.02" value="-0.5"><span class="val" id="clockZv"></span></div>
+  <div class="row"><label>（空中）高さ</label><input id="clockY" type="range" min="0" max="1" step="0.02" value="0.76"><span class="val" id="clockYv"></span></div>
+  <div class="row"><label>（空中）左右</label><input id="clockX" type="range" min="-0.5" max="0.5" step="0.02" value="0.2"><span class="val" id="clockXv"></span></div>
+
+  <h2>アバター</h2>
+  <div class="row"><label>表示</label><input id="showAvatar" type="checkbox" checked></div>
+  <div class="row"><label>身長(×部屋の高さ)</label><input id="avatarH" type="range" min="0.3" max="1.1" step="0.02" value="0.74"><span class="val" id="avatarHv"></span></div>
+  <div class="row"><label>前後位置</label><input id="avatarZ" type="range" min="-1" max="0.2" step="0.02" value="-0.5"><span class="val" id="avatarZv"></span></div>
+  <div class="row"><label>左右</label><input id="avatarX" type="range" min="-0.5" max="0.5" step="0.02" value="0"><span class="val" id="avatarXv"></span></div>
+  <div class="row"><label>視線を向ける</label><input id="lookAtMe" type="checkbox" checked></div>
+  <div class="row"><label>テクスチャ上限(px)</label>
+    <select id="texLimit">
+      <option value="1024">1024（省メモリ・推奨）</option>
+      <option value="2048">2048</option>
+      <option value="0">縮小しない</option>
+    </select></div>
+  <div class="row"><label>自分のモデル(.vrm/.glb)</label><input id="modelFile" type="file" accept=".vrm,.glb,model/gltf-binary"></div>
+  <div class="row"><button class="btn sec" id="forgetModel">保存したモデルを消して既定に戻す</button></div>
+  <div class="note">読み込んだモデルはこの端末のブラウザ内（IndexedDB）に保存され、次回から自動で読み込まれます。サーバーには送られません。</div>
+  <div class="note" id="credit">同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0（モデル内メタデータ: 再配布可・改変再配布可・クレジット表記必須）</div>
+
+  <h2>表示</h2>
+  <div class="row"><button class="btn" id="fsBtn">全画面 + 画面を消さない</button><button class="btn sec" id="resetBtn">設定を初期化</button></div>
+  <div class="note">画面を1回タップでUIの表示/非表示。設定は端末内に保存されます。</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+// ---------- 設定 ----------
+const DEF = {
+  mode: 'slider', autoSway: true, eyeX: 0, eyeY: 0, eyeZ: 55,
+  waveDetect: true, mirror: false, hfov: 65, ipd: 63, smooth: 0.3,
+  diag: 6.5, useTilt: false, tiltManual: 90, frame: 4,
+  depth: 1.4, roomStyle: 'wood', light: 1, lightDir: -40,
+  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.4, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
+  showAvatar: true, avatarH: 0.74, avatarZ: -0.5, avatarX: 0, lookAtMe: true, texLimit: '1024',
+};
+let S = { ...DEF };
+try { const s = localStorage.getItem('win3d-settings'); if (s) S = { ...DEF, ...JSON.parse(s) }; } catch (e) {}
+if (location.hash === '#perspective') S.mode = 'slider';
+function save() { try { localStorage.setItem('win3d-settings', JSON.stringify(S)); } catch (e) {} }
+
+const $ = id => document.getElementById(id);
+const hud = $('hud');
+function setHud(msg, err) { hud.textContent = msg; hud.classList.toggle('err', !!err); }
+
+// ---------- IndexedDB（読み込んだモデルの端末内保存） ----------
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('win3d', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async put(key, val) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); },
+  async get(key) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('files', 'readonly'); const r = tx.objectStore('files').get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async del(key) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); },
+};
+
+// ---------- 画面の物理寸法 ----------
+// ブラウザは物理DPIを取れないため、対角インチは設定値（既定6.5"）に依存する。
+let W = 0.07, H = 0.15;           // 画面全体 [m]
+let Wi = 0.06, Hi = 0.14;         // 黒枠内側（部屋の開口） [m]
+function updateScreenSize() {
+  const a = innerWidth / innerHeight;
+  const d = S.diag * 0.0254;
+  H = d / Math.sqrt(a * a + 1); W = a * H;
+  const f = S.frame / 1000;
+  Wi = Math.max(0.01, W - 2 * f); Hi = Math.max(0.01, H - 2 * f);
+}
+
+// ---------- three.js ----------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.localClippingEnabled = true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+// カメラ: 位置=目、向き=画面法線。射影行列は毎フレーム手計算（オフアクシス射影）。
+const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 20);
+scene.add(camera);
+
+// 画面平面 z=0 で部屋を切る（壁が画面より手前に出ないように）。手前に出す物体には適用しない。
+const glassClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+
+// 傾き支点: 開口の下端。pivot.rotation.x = 設置角から求めた「後ろ倒し角」。
+const pivot = new THREE.Group(); scene.add(pivot);
+const world = new THREE.Group(); pivot.add(world);
+let roomGroup = null, frameMesh = null;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x667788, 1.0); world.add(hemi);
+const dir = new THREE.DirectionalLight(0xffffff, 1.0); world.add(dir); world.add(dir.target);
+// シーン全体の倍率。アバターのワールドスケールを 1（＝実寸 m）に保つために、部屋・画面・目の座標側を G 倍する
+// （スプリングボーン等は実寸前提で計算されるため、アバターを縮小すると揺れものが破綻する）
+let G = 1;
+
+// ---------- 手続きテクスチャ ----------
+function makeTex(w, h, draw, repeat = [1, 1]) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat);
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function noise(ctx, w, h, amt, n = 4000) {
+  for (let i = 0; i < n; i++) { ctx.fillStyle = `rgba(0,0,0,${Math.random() * amt})`; ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+}
+const STYLES = {
+  wood: {
+    floor: () => makeTex(512, 512, (c, w, h) => {
+      c.fillStyle = '#9a6b3f'; c.fillRect(0, 0, w, h);
+      const pw = w / 4;
+      for (let i = 0; i < 4; i++) {
+        c.fillStyle = `hsl(${26 + Math.random() * 6},${38 + Math.random() * 10}%,${36 + Math.random() * 10}%)`;
+        c.fillRect(i * pw + 2, 0, pw - 4, h);
+        for (let k = 0; k < 14; k++) { c.strokeStyle = `rgba(60,30,10,${0.08 + Math.random() * 0.15})`; c.lineWidth = 1 + Math.random() * 2; c.beginPath(); const x = i * pw + Math.random() * pw; c.moveTo(x, 0); c.bezierCurveTo(x + 10, h / 3, x - 10, 2 * h / 3, x + 5, h); c.stroke(); }
+        c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(i * pw, 0, 2, h);
+      }
+      noise(c, w, h, 0.08);
+    }, [2, 4]),
+    wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#e9e4da'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.05, 3000); }, [2, 2]),
+    back: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#d9d2c5'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.05, 3000); }, [2, 2]),
+    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#f2efe9'; c.fillRect(0, 0, w, h); }),
+    hemi: [0xffffff, 0x887766], sun: 0xfff2e0,
+  },
+  tatami: {
+    floor: () => makeTex(512, 512, (c, w, h) => {
+      c.fillStyle = '#9fae6a'; c.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 3) { c.fillStyle = `rgba(60,80,20,${0.12 + 0.1 * Math.random()})`; c.fillRect(0, y, w, 1); }
+      c.fillStyle = '#2b2b1e'; c.fillRect(0, 0, w, 10); c.fillRect(0, h - 10, w, 10); c.fillRect(w / 2 - 5, 0, 10, h);
+    }, [1, 2]),
+    wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#d8c9a3'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.08); }, [2, 2]),
+    back: () => makeTex(512, 512, (c, w, h) => {
+      c.fillStyle = '#e7dcc0'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#5a3a1e'; for (let i = 0; i <= 4; i++) { c.fillRect(i * w / 4 - 4, 0, 8, h); } for (let j = 0; j <= 6; j++) { c.fillRect(0, j * h / 6 - 3, w, 6); }
+    }, [1, 1]),
+    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#6b4a2b'; c.fillRect(0, 0, w, h); }),
+    hemi: [0xfff4dc, 0x665533], sun: 0xffe8c0,
+  },
+  night: {
+    floor: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#2a2a33'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.2, 6000); }, [3, 6]),
+    wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#1e2230'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.15); }, [2, 2]),
+    back: () => makeTex(512, 512, (c, w, h) => {
+      c.fillStyle = '#0a0d1a'; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < 160; i++) { c.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.7})`; const r = Math.random() * 1.5; c.beginPath(); c.arc(Math.random() * w, Math.random() * h * 0.6, r, 0, 7); c.fill(); }
+      const g = c.createLinearGradient(0, h * 0.55, 0, h); g.addColorStop(0, 'rgba(40,20,60,0)'); g.addColorStop(1, 'rgba(90,40,120,.6)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, [1, 1]),
+    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#101018'; c.fillRect(0, 0, w, h); }),
+    hemi: [0x8899ff, 0x221133], sun: 0xaabbff,
+  },
+  grid: {
+    floor: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#061428'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a7fff'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 8]),
+    wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#071a33'; c.fillRect(0, 0, w, h); c.strokeStyle = '#1f5fbf'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [8, 4]),
+    back: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#05122a'; c.fillRect(0, 0, w, h); c.strokeStyle = '#1f5fbf'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 4]),
+    ceil: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#061428'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a7fff'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 8]),
+    hemi: [0xffffff, 0x224488], sun: 0xffffff,
+  },
+};
+const texCache = {};
+function styleTex(style, key) { const k = style + ':' + key; if (!texCache[k]) texCache[k] = STYLES[style][key](); return texCache[k]; }
+
+// ---------- 部屋の構築 ----------
+let depth = 0.1, Hr = 0.15;
+function buildRoom() {
+  if (roomGroup) { world.remove(roomGroup); roomGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  if (frameMesh) { scene.remove(frameMesh); frameMesh.geometry.dispose(); }
+  depth = Wi * S.depth; Hr = Hi * 1.15;
+  const st = STYLES[S.roomStyle];
+  const mat = key => new THREE.MeshStandardMaterial({ map: styleTex(S.roomStyle, key), roughness: 0.9, metalness: 0, clippingPlanes: [glassClip] });
+  roomGroup = new THREE.Group();
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('floor')); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, -depth / 2);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('ceil')); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, Hr, -depth / 2);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(Wi, Hr), mat('back')); back.position.set(0, Hr / 2, -depth);
+  const left = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); left.rotation.y = Math.PI / 2; left.position.set(-Wi / 2, Hr / 2, -depth / 2);
+  const right = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); right.rotation.y = -Math.PI / 2; right.position.set(Wi / 2, Hr / 2, -depth / 2);
+  roomGroup.add(floor, ceil, back, left, right);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2; shadow.name = 'blobShadow'; roomGroup.add(shadow);
+  world.add(roomGroup);
+
+  // 黒枠（画面平面 z=0、開口に穴）
+  const shape = new THREE.Shape(); shape.moveTo(-W / 2, -H / 2); shape.lineTo(W / 2, -H / 2); shape.lineTo(W / 2, H / 2); shape.lineTo(-W / 2, H / 2); shape.closePath();
+  const hole = new THREE.Path(); hole.moveTo(-Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, Hi / 2); hole.lineTo(-Wi / 2, Hi / 2); hole.closePath();
+  shape.holes.push(hole);
+  frameMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  frameMesh.position.z = 0.0002; scene.add(frameMesh);
+
+  hemi.color.setHex(st.hemi[0]); hemi.groundColor.setHex(st.hemi[1]); dir.color.setHex(st.sun);
+  layoutObjects();
+}
+
+// ---------- 時計（キャンバス → テクスチャ） ----------
+const clockCanvas = document.createElement('canvas'); clockCanvas.width = 1024; clockCanvas.height = 512;
+const clockCtx = clockCanvas.getContext('2d');
+const clockTex = new THREE.CanvasTexture(clockCanvas); clockTex.colorSpace = THREE.SRGBColorSpace; clockTex.anisotropy = 4;
+const clockMat = new THREE.MeshBasicMaterial({ map: clockTex, transparent: true, depthWrite: false });
+// 空中に浮かせる版
+const clockMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 1), clockMat); clockMesh.renderOrder = 2; world.add(clockMesh);
+// アバターが持つボード版（板 + 時計面）
+const board = new THREE.Group(); world.add(board);
+const boardBack = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.8, side: THREE.DoubleSide }));
+const boardEdge = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8, side: THREE.DoubleSide }));
+const boardFace = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), clockMat); boardFace.renderOrder = 2;
+boardEdge.position.z = 0.0005; boardFace.position.z = 0.0012;
+board.add(boardBack, boardEdge, boardFace);
+
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+let lastClockSec = -1;
+function drawClock(now, force) {
+  const sec = Math.floor(now.getTime() / 1000);
+  if (!force && sec === lastClockSec) return; lastClockSec = sec;
+  const c = clockCtx, w = clockCanvas.width, h = clockCanvas.height;
+  c.clearRect(0, 0, w, h);
+  const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0'), ss = String(now.getSeconds()).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日(${WD[now.getDay()]})`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  const onBoard = S.clockPlace === 'board';
+  if (S.clockStyle === 'digital') {
+    c.fillStyle = onBoard ? '#15181f' : 'rgba(10,12,18,.85)'; roundRect(c, 20, 60, w - 40, h - 120, 40); c.fill();
+    c.fillStyle = '#e8f6ff'; c.font = 'bold 230px "Roboto Mono", "SF Mono", Menlo, monospace';
+    c.fillText(`${hh}:${mm}`, w / 2 - 70, h / 2 - (S.showDate ? 30 : 0));
+    c.font = '90px "Roboto Mono", Menlo, monospace'; c.fillStyle = '#7fc8ff'; c.fillText(ss, w / 2 + 390, h / 2 + 10 - (S.showDate ? 30 : 0));
+    if (S.showDate) { c.font = '58px sans-serif'; c.fillStyle = '#aab'; c.fillText(dateStr, w / 2, h / 2 + 150); }
+  } else if (S.clockStyle === 'neon') {
+    if (onBoard) { c.fillStyle = '#0b0b14'; roundRect(c, 20, 20, w - 40, h - 40, 40); c.fill(); }
+    c.shadowColor = '#ff3fa0'; c.shadowBlur = 40; c.fillStyle = '#ffd6ee'; c.font = 'bold 250px "Arial Rounded MT Bold", Arial, sans-serif';
+    c.fillText(`${hh}:${mm}`, w / 2, h / 2 - (S.showDate ? 40 : 0));
+    c.shadowColor = '#3fd0ff'; c.fillStyle = '#d8f6ff'; c.font = 'bold 90px Arial, sans-serif'; c.fillText(ss, w / 2 + 420, h / 2 + 50 - (S.showDate ? 40 : 0));
+    if (S.showDate) { c.shadowBlur = 20; c.font = '60px sans-serif'; c.fillStyle = '#cfe'; c.fillText(dateStr, w / 2, h / 2 + 160); }
+    c.shadowBlur = 0;
+  } else if (S.clockStyle === 'minimal') {
+    c.fillStyle = onBoard ? '#222' : '#fff'; c.font = '200 240px "Helvetica Neue", Arial, sans-serif'; c.fillText(`${hh}:${mm}`, w / 2, h / 2 - (S.showDate ? 30 : 0));
+    if (S.showDate) { c.font = '300 56px sans-serif'; c.fillStyle = onBoard ? '#555' : '#ccc'; c.fillText(dateStr, w / 2, h / 2 + 150); }
+  } else { // analog
+    const r = h / 2 - 20, cx = w / 2, cy = h / 2;
+    c.fillStyle = '#f4f1ea'; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
+    c.strokeStyle = '#222'; c.lineWidth = 10; c.stroke();
+    for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2, l = i % 5 ? 12 : 30; c.lineWidth = i % 5 ? 3 : 8; c.beginPath(); c.moveTo(cx + Math.sin(a) * (r - 20), cy - Math.cos(a) * (r - 20)); c.lineTo(cx + Math.sin(a) * (r - 20 - l), cy - Math.cos(a) * (r - 20 - l)); c.stroke(); }
+    c.fillStyle = '#222'; c.font = 'bold 56px sans-serif';
+    for (let i = 1; i <= 12; i++) { const a = i / 12 * Math.PI * 2; c.fillText(String(i), cx + Math.sin(a) * (r - 90), cy - Math.cos(a) * (r - 90)); }
+    const hand = (a, len, wdt, col) => { c.strokeStyle = col; c.lineWidth = wdt; c.lineCap = 'round'; c.beginPath(); c.moveTo(cx - Math.sin(a) * 30, cy + Math.cos(a) * 30); c.lineTo(cx + Math.sin(a) * len, cy - Math.cos(a) * len); c.stroke(); };
+    const s = now.getSeconds(), m = now.getMinutes() + s / 60, hr = (now.getHours() % 12) + m / 60;
+    hand(hr / 12 * Math.PI * 2, r * 0.55, 16, '#222'); hand(m / 60 * Math.PI * 2, r * 0.8, 10, '#222'); hand(s / 60 * Math.PI * 2, r * 0.88, 4, '#c0392b');
+    c.fillStyle = '#c0392b'; c.beginPath(); c.arc(cx, cy, 12, 0, 7); c.fill();
+    if (S.showDate) { c.fillStyle = '#222'; c.font = '40px sans-serif'; c.fillText(`${now.getMonth() + 1}/${now.getDate()} ${WD[now.getDay()]}`, cx, cy + r * 0.38); }
+  }
+  clockTex.needsUpdate = true;
+}
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+// ---------- アバター ----------
+const loader = new GLTFLoader();
+loader.register(p => new VRMLoaderPlugin(p));
+let vrm = null, avatarRoot = null, avatarNativeHeight = 1.6;
+const lookTarget = new THREE.Object3D(); scene.add(lookTarget);
+
+// .glb が直接取れない配置（拡張子制限のあるホスト）向けに、同内容を base64 で包んだ .json も試す
+async function fetchModelBuffer(url) {
+  const r = await fetch(url);
+  if (r.ok) return await r.arrayBuffer();
+  const r2 = await fetch(url.replace(/\.(glb|vrm)$/i, '.json'));
+  if (!r2.ok) throw new Error(`HTTP ${r.status} / ${r2.status}`);
+  const j = await r2.json();
+  const bin = atob(j.b64); const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8.buffer;
+}
+
+// テクスチャ縮小（4K/2Kテクスチャ×多数はスマホGPUに載らないため）
+function downscaleTextures(root, limit) {
+  if (!limit) return 0;
+  const seen = new Set(); let n = 0;
+  root.traverse(o => {
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) for (const k of Object.keys(m)) {
+      const t = m[k];
+      if (!t || !t.isTexture || seen.has(t)) continue; seen.add(t);
+      const img = t.image; if (!img || !img.width) continue;
+      if (img.width <= limit && img.height <= limit) continue;
+      const sc = limit / Math.max(img.width, img.height);
+      const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.width * sc)); cv.height = Math.max(1, Math.round(img.height * sc));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      if (img.close) img.close();
+      t.image = cv; t.needsUpdate = true; n++;
+    }
+  });
+  return n;
+}
+
+async function loadModelBuffer(buf, label) {
+  setHud(`モデル読込中… ${label}`);
+  const gltf = await new Promise((res, rej) => loader.parse(buf, '', res, rej));
+  if (avatarRoot) { world.remove(avatarRoot); avatarRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  vrm = gltf.userData.vrm || null;
+  const nTex = downscaleTextures(gltf.scene, parseInt(S.texLimit) || 0);
+  if (vrm) {
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+    VRMUtils.combineSkeletons(gltf.scene);
+    VRMUtils.combineMorphs(vrm);
+    VRMUtils.rotateVRM0(vrm); // VRM0.x は向きが逆なので揃える（VRM1 には影響なし）
+    avatarRoot = vrm.scene;
+    vrm.scene.traverse(o => { o.frustumCulled = false; });
+    if (vrm.lookAt) { vrm.lookAt.target = lookTarget; vrm.lookAt.autoUpdate = true; }
+    const meta = vrm.meta || {};
+    const credit = meta.metaVersion === '1'
+      ? `${meta.name || ''} / ${(meta.authors || []).join(', ')} / ${meta.licenseUrl || ''}`
+      : `${meta.title || ''} / ${meta.author || ''} / ${meta.licenseName || ''}`;
+    if (label !== 'Seed-san') $('credit').textContent = `読込モデル: ${credit}`;
+    else $('credit').textContent = '同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0';
+    initPose();
+  } else {
+    avatarRoot = gltf.scene;
+  }
+  avatarRoot.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(avatarRoot);
+  avatarNativeHeight = Math.max(0.01, box.max.y - box.min.y);
+  avatarRoot.userData.minY = box.min.y;
+  world.add(avatarRoot);
+  layoutObjects();
+  setHud(nTex ? `テクスチャ ${nTex} 枚を ${S.texLimit}px に縮小` : '');
+}
+async function loadModel(url, label) {
+  try { await loadModelBuffer(await fetchModelBuffer(url), label); }
+  catch (e) { console.error(e); setHud(`モデル読込失敗: ${label}\n${e.message || e}\n（file:// で開いている場合は読めません。設定→自分のモデル から選んでください）`, true); }
+}
+async function loadUserFile(file) {
+  try {
+    const buf = await file.arrayBuffer();
+    await loadModelBuffer(buf, file.name);
+    try { await idb.put('userModel', { name: file.name, buf }); } catch (e) { console.warn('IndexedDB 保存失敗', e); }
+  } catch (e) { console.error(e); setHud(`モデル読込失敗: ${file.name}\n${e.message || e}`, true); }
+}
+async function loadStartupModel() {
+  try {
+    const rec = await idb.get('userModel');
+    if (rec && rec.buf) { await loadModelBuffer(rec.buf, rec.name); return; }
+  } catch (e) { console.warn(e); }
+  await loadModel('models/seed-san.glb', 'Seed-san');
+}
+
+function layoutObjects() {
+  const cw = Wi * S.clockSize, ch = cw / 2;
+  clockMesh.scale.set(cw / 2, ch, 1);
+  clockMesh.position.set(S.clockX * Wi, S.clockY * Hr, S.clockZ * depth);
+  clockMesh.visible = S.clockPlace === 'float';
+  board.visible = S.clockPlace === 'board' && !!vrm && S.showAvatar;
+  if (avatarRoot) {
+    const target = Hr * S.avatarH;
+    const sc = target / avatarNativeHeight;
+    G = 1 / sc;
+    avatarRoot.scale.setScalar(sc);
+    avatarRoot.position.set(S.avatarX * Wi, -avatarRoot.userData.minY * sc, S.avatarZ * depth);
+    avatarRoot.visible = S.showAvatar;
+    const sh = roomGroup?.getObjectByName('blobShadow');
+    if (sh) { sh.visible = S.showAvatar; sh.position.set(avatarRoot.position.x, 0.0003, avatarRoot.position.z); sh.scale.setScalar(target * 0.14); }
+    // ボード寸法（身長比。placeBoard で両手の間隔にも合わせる）
+    const bw = target * S.boardSize * 0.75, bh = bw / 2;
+    boardBack.scale.set(bw, bh, 1); boardEdge.scale.set(bw * 0.96, bh * 0.92, 1); boardFace.scale.set(bw * 0.94, bh * 0.88, 1);
+    board.userData.bw = bw; board.userData.bh = bh;
+  } else { G = 1; }
+  pivot.scale.setScalar(G); pivot.position.set(0, -Hi / 2 * G, 0);
+  if (frameMesh) frameMesh.scale.setScalar(G);
+}
+
+// ---------- ポーズ（手続き） ----------
+// 正規化ボーンは静止時に全て単位回転・ワールド軸揃えなので、「腕の向きベクトル」から回転を直接作れる。
+const _X = new THREE.Vector3(1, 0, 0), _NX = new THREE.Vector3(-1, 0, 0);
+const qTmp = new THREE.Quaternion(), qTmp2 = new THREE.Quaternion(), vTmp = new THREE.Vector3();
+function armQuats(side, dUpper, dLower) {
+  // side: 'left'(+X) / 'right'(-X)。戻り値: [上腕の回転, 前腕の回転(親基準)]
+  const axis = side === 'left' ? _X : _NX;
+  const q1 = new THREE.Quaternion().setFromUnitVectors(axis, vTmp.copy(dUpper).normalize());
+  const q2w = new THREE.Quaternion().setFromUnitVectors(axis, vTmp.copy(dLower).normalize());
+  const q2 = q1.clone().invert().multiply(q2w);
+  return [q1, q2];
+}
+// 「ボードを持つ」ポーズ: 上腕は下やや前、前腕は内側・前・やや上
+const HOLD = {
+  left: armQuats('left', new THREE.Vector3(0.22, -0.95, 0.22), new THREE.Vector3(-0.22, 0.12, 0.95)),
+  right: armQuats('right', new THREE.Vector3(-0.22, -0.95, 0.22), new THREE.Vector3(0.22, 0.12, 0.95)),
+};
+// 「手を振る」ポーズ（右腕）: 上腕は横上、前腕は上。前腕は時間で左右に振る
+function waveQuats(t) {
+  const sw = Math.sin(t * 9) * 0.55;
+  return armQuats('right', new THREE.Vector3(-0.50, 0.82, 0.28), new THREE.Vector3(0.05 + sw, 0.92, 0.30));
+}
+const handTilt = { left: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.6, 0.4)), right: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.6, -0.4)) };
+let wave = { active: false, t0: 0, dur: 2.6, blend: 0 };
+function initPose() {
+  const b = n => vrm.humanoid?.getNormalizedBoneNode(n);
+  for (const n of ['leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'head', 'neck', 'spine']) { const o = b(n); if (o) { o.rotation.set(0, 0, 0); o.quaternion.identity(); } }
+  for (const n of ['leftUpperLeg', 'rightUpperLeg']) { const o = b(n); if (o) o.rotation.set(0, 0, 0); }
+}
+function startWave() { if (!vrm) return; wave.active = true; wave.t0 = performance.now() / 1000; }
+function applyPose(t, dt) {
+  const b = n => vrm.humanoid?.getNormalizedBoneNode(n);
+  const lu = b('leftUpperArm'), ll = b('leftLowerArm'), ru = b('rightUpperArm'), rl = b('rightLowerArm'), lh = b('leftHand'), rh = b('rightHand');
+  const k = 1 - Math.exp(-dt * 10);
+  if (lu) lu.quaternion.slerp(HOLD.left[0], k); if (ll) ll.quaternion.slerp(HOLD.left[1], k); if (lh) lh.quaternion.slerp(handTilt.left, k);
+  // 右腕: 手振りとのブレンド
+  // ブレンド係数は実時間ベース（フレームレートが低くても同じ長さで振る）
+  const el = wave.active ? t - wave.t0 : 99;
+  if (wave.active && el > wave.dur + 0.5) wave.active = false;
+  const ss = (a, b, x) => { const u = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+  wave.blend = wave.active ? ss(0, 0.35, el) * (1 - ss(wave.dur - 0.45, wave.dur, el)) : 0;
+  const [wq1, wq2] = waveQuats(t);
+  qTmp.copy(HOLD.right[0]).slerp(wq1, wave.blend); qTmp2.copy(HOLD.right[1]).slerp(wq2, wave.blend);
+  if (ru) ru.quaternion.slerp(qTmp, k); if (rl) rl.quaternion.slerp(qTmp2, k);
+  if (rh) { const open = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.sin(t * 11) * 0.25)); qTmp.copy(handTilt.right).slerp(open, wave.blend); rh.quaternion.slerp(qTmp, k); }
+  // 表情
+  if (vrm.expressionManager) {
+    vrm.expressionManager.setValue('happy', Math.min(1, wave.blend) * 0.8);
+  }
+}
+
+// ボードを手の位置に追従させる
+const pL = new THREE.Vector3(), pR = new THREE.Vector3(), pC = new THREE.Vector3();
+function placeBoard() {
+  if (!board.visible || !vrm) return;
+  const lh = vrm.humanoid?.getNormalizedBoneNode('leftHand'), rh = vrm.humanoid?.getNormalizedBoneNode('rightHand');
+  if (!lh || !rh) return;
+  lh.getWorldPosition(pL); rh.getWorldPosition(pR);
+  world.worldToLocal(pL); world.worldToLocal(pR);
+  const bw = board.userData.bw || 0.05, bh = board.userData.bh || 0.025;
+  const sc = avatarRoot.scale.x;
+  // 両手で持つ時は両手の中点、振っている時は左手基準（板の左下を左手が持っている想定）
+  pC.copy(pL).add(pR).multiplyScalar(0.5);
+  const oneHand = new THREE.Vector3(pL.x - bw * 0.46, pL.y, pL.z); // 左手(+X側)が板の右端を持つ
+  pC.lerp(oneHand, wave.blend);
+  pC.y += bh * 0.45; pC.z += sc * 0.03;
+  board.position.lerp(pC, 0.5);
+  const tiltZ = 0.18 * wave.blend; // 片手持ちで反対側が少し下がる
+  qTmp.setFromEuler(new THREE.Euler(-0.12, 0, tiltZ));
+  board.quaternion.slerp(qTmp, 0.3);
+}
+
+// ---------- 視点（目の位置） [m, 画面座標] ----------
+const eye = new THREE.Vector3(0, 0, 0.55);
+const eyeRaw = new THREE.Vector3(0, 0, 0.55);
+let faceSeenAt = 0;
+
+// --- 顔追跡 + 手振り検出 ---
+let faceLM = null, handLM = null, video = $('video'), stream = null, faceFps = 0, lastVideoTime = -1, frameNo = 0;
+let handSeenAt = 0, lastWaveAt = 0;
+const wristHist = []; // {t, x}
+async function startFace() {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('このブラウザ/環境ではカメラが使えません（https が必要）');
+    setHud('カメラ起動中…');
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    video.srcObject = stream; await video.play();
+    setHud('顔検出モデル読込中…');
+    const { FaceLandmarker, HandLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
+    const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm');
+    const fopts = d => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: d }, runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false });
+    try { faceLM = await FaceLandmarker.createFromOptions(vision, fopts('GPU')); }
+    catch (e) { console.warn('GPU delegate failed, fallback CPU', e); faceLM = await FaceLandmarker.createFromOptions(vision, fopts('CPU')); }
+    if (S.waveDetect) {
+      setHud('手検出モデル読込中…');
+      const hopts = d => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: d }, runningMode: 'VIDEO', numHands: 1 });
+      try { handLM = await HandLandmarker.createFromOptions(vision, hopts('GPU')); }
+      catch (e) { console.warn('hand GPU failed', e); try { handLM = await HandLandmarker.createFromOptions(vision, hopts('CPU')); } catch (e2) { console.warn('hand CPU failed', e2); } }
+    }
+    setHud('');
+  } catch (e) {
+    console.error(e);
+    setHud(`顔追跡を開始できません: ${e.message || e}\n視点スライダーに切り替えます`, true);
+    stopFace(); S.mode = 'slider'; $('mode').value = 'slider'; save(); applyMode();
+  }
+}
+function stopFace() {
+  if (faceLM) { try { faceLM.close(); } catch (e) {} faceLM = null; }
+  if (handLM) { try { handLM.close(); } catch (e) {} handLM = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; }
+}
+let fpsCount = 0, fpsT = performance.now();
+function updateFace() {
+  if (!faceLM || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime; frameNo++;
+  const now = performance.now();
+  const res = faceLM.detectForVideo(video, now);
+  fpsCount++; if (now - fpsT > 1000) { faceFps = fpsCount; fpsCount = 0; fpsT = now; }
+  const lm = res.faceLandmarks?.[0];
+  if (lm && lm.length >= 474) {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const L = lm[468], R = lm[473];                        // 虹彩中心
+    const ipdPx = Math.hypot((L.x - R.x) * vw, (L.y - R.y) * vh);
+    if (ipdPx >= 2) {
+      const fpx = (vw / 2) / Math.tan(S.hfov * Math.PI / 360);  // 焦点距離[px]（画角は設定値＝仮定）
+      const Z = (S.ipd / 1000) * fpx / ipdPx;                   // 瞳孔間距離からの距離推定
+      const mx = (L.x + R.x) / 2 - 0.5, my = (L.y + R.y) / 2 - 0.5;
+      let x = mx * vw * Z / fpx, y = -my * vh * Z / fpx;
+      if (!S.mirror) x = -x;                                     // 非ミラー映像では、見る人の右(+X)が画像左に写る
+      eyeRaw.set(x, y + H / 2 + 0.005, Z);                       // インカメラは画面上端中央にあると仮定
+      faceSeenAt = now;
+    }
+  }
+  // 手: 2フレームに1回
+  if (handLM && S.waveDetect && frameNo % 2 === 0) {
+    const hr = handLM.detectForVideo(video, now + 0.5);
+    const h = hr.landmarks?.[0];
+    if (h) {
+      handSeenAt = now;
+      // 手のひらが開いて上を向いている（指先が手首より上）ときだけ手首xを記録
+      const wrist = h[0], tips = [h[8], h[12], h[16]];
+      const up = tips.every(p => p.y < wrist.y - 0.05);
+      if (up) wristHist.push({ t: now, x: wrist.x });
+    }
+    while (wristHist.length && now - wristHist[0].t > 1500) wristHist.shift();
+    if (now - handSeenAt > 400) wristHist.length = 0;
+    // 1.5秒以内に左右の折り返しが2回以上（振幅 4%幅以上）
+    if (wristHist.length >= 6 && now - lastWaveAt > 5000) {
+      let dirn = 0, rev = 0, ext = wristHist[0].x;
+      for (let i = 1; i < wristHist.length; i++) {
+        const d = wristHist[i].x - ext;
+        if (Math.abs(d) < 0.04) continue;
+        const s = Math.sign(d);
+        if (dirn && s !== dirn) rev++;
+        dirn = s; ext = wristHist[i].x;
+      }
+      if (rev >= 2) { lastWaveAt = now; wristHist.length = 0; startWave(); }
+    }
+  }
+}
+
+// --- 傾きセンサー ---
+let tiltSensorDeg = null, motionBound = false;
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  const mag = Math.hypot(g.x, g.y, g.z); if (mag < 1) return;
+  const a = Math.acos(Math.min(1, Math.abs(g.z) / mag)) * 180 / Math.PI;  // 画面が水平からどれだけ立っているか
+  tiltSensorDeg = tiltSensorDeg == null ? a : tiltSensorDeg * 0.9 + a * 0.1;
+}
+async function enableTilt() {
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') throw new Error('センサー許可なし');
+    }
+    if (!motionBound) { window.addEventListener('devicemotion', onMotion); motionBound = true; }
+  } catch (e) { setHud('傾きセンサーが使えません: ' + (e.message || e), true); S.useTilt = false; $('useTilt').checked = false; save(); }
+}
+
+// ---------- オフアクシス射影 ----------
+function applyProjection() {
+  const ex = eye.x * G, ey = eye.y * G, ez = Math.max(0.05, eye.z) * G;
+  const n = 0.02 * G, f = 20 * G;
+  const k = n / ez;
+  const Wg = W * G, Hg = H * G;
+  const left = (-Wg / 2 - ex) * k, right = (Wg / 2 - ex) * k, bottom = (-Hg / 2 - ey) * k, top = (Hg / 2 - ey) * k;
+  camera.position.set(ex, ey, ez); camera.rotation.set(0, 0, 0);
+  camera.near = n; camera.far = f;
+  camera.projectionMatrix.makePerspective(left, right, top, bottom, n, f);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+// ---------- UI ----------
+const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'diag', 'tiltManual', 'frame', 'depth', 'light', 'lightDir', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
+const checks = ['autoSway', 'waveDetect', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe'];
+const selects = ['mode', 'roomStyle', 'clockPlace', 'clockStyle', 'texLimit'];
+const needsRoom = new Set(['diag', 'frame', 'depth', 'roomStyle']);
+const needsLayout = new Set(['clockPlace', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX', 'showAvatar']);
+function showVal(id) { const v = $(id + 'v'); if (v) v.textContent = String(S[id]); }
+function bindUI() {
+  for (const id of sliders) { const el = $(id); el.value = S[id]; showVal(id); el.addEventListener('input', () => { S[id] = parseFloat(el.value); showVal(id); onChange(id); }); }
+  for (const id of checks) { const el = $(id); el.checked = !!S[id]; el.addEventListener('change', () => { S[id] = el.checked; onChange(id); }); }
+  for (const id of selects) { const el = $(id); el.value = String(S[id]); el.addEventListener('change', () => { S[id] = el.value; onChange(id); }); }
+}
+function onChange(id) {
+  save();
+  if (needsRoom.has(id)) { updateScreenSize(); buildRoom(); }
+  if (needsLayout.has(id)) layoutObjects();
+  if (id === 'clockStyle' || id === 'showDate' || id === 'clockPlace') drawClock(new Date(), true);
+  if (id === 'mode') applyMode();
+  if (id === 'waveDetect' && S.mode === 'face') { stopFace(); startFace(); }
+  if (id === 'useTilt') { if (S.useTilt) enableTilt(); }
+  if (id === 'eyeX') { S.autoSway = false; $('autoSway').checked = false; save(); }
+  if (id === 'texLimit') setHud('テクスチャ上限はモデルを次に読み込んだ時から有効です');
+}
+function applyMode() {
+  const face = S.mode === 'face';
+  $('eyeX').style.display = face ? 'none' : '';
+  for (const l of $('bar').querySelectorAll('label')) l.style.display = face ? 'none' : '';
+  if (face) startFace(); else stopFace();
+}
+bindUI();
+$('gear').addEventListener('click', () => $('panel').classList.add('open'));
+$('closePanel').addEventListener('click', () => $('panel').classList.remove('open'));
+$('waveBtn').addEventListener('click', startWave);
+canvas.addEventListener('pointerdown', () => { if ($('panel').classList.contains('open')) { $('panel').classList.remove('open'); return; } document.body.classList.toggle('ui-hidden'); });
+$('resetBtn').addEventListener('click', () => { S = { ...DEF }; save(); location.reload(); });
+$('forgetModel').addEventListener('click', async () => { try { await idb.del('userModel'); } catch (e) {} location.reload(); });
+let wakeLock = null;
+$('fsBtn').addEventListener('click', async () => {
+  try { await document.documentElement.requestFullscreen?.(); } catch (e) {}
+  try { if (navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (e) {}
+  $('panel').classList.remove('open');
+});
+document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && wakeLock) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} } });
+$('modelFile').addEventListener('change', e => { const f = e.target.files?.[0]; if (f) loadUserFile(f); });
+addEventListener('hashchange', () => { if (location.hash === '#perspective') { S.mode = 'slider'; $('mode').value = 'slider'; save(); applyMode(); } });
+
+// ---------- リサイズ ----------
+function onResize() { renderer.setSize(innerWidth, innerHeight, false); updateScreenSize(); buildRoom(); }
+addEventListener('resize', onResize);
+
+// ---------- メインループ ----------
+const clock = new THREE.Clock();
+let blinkT = 0, nextBlink = 2;
+const tmpV = new THREE.Vector3(), headPos = new THREE.Vector3();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.1, clock.getDelta()); const t = clock.elapsedTime;
+
+  // 視点
+  if (S.mode === 'face') {
+    updateFace();
+    if (performance.now() - faceSeenAt > 1500) eyeRaw.set(0, 0, S.eyeZ / 100);
+    eye.lerp(eyeRaw, S.smooth);
+  } else {
+    if (S.autoSway) { S.eyeX = Math.sin(t * 0.8) * 18; $('eyeX').value = S.eyeX; }
+    eyeRaw.set(S.eyeX / 100, S.eyeY / 100, S.eyeZ / 100);
+    eye.lerp(eyeRaw, 0.25);
+  }
+
+  // 傾き（床を机と水平に）
+  let alpha = S.tiltManual;
+  if (S.useTilt && tiltSensorDeg != null) alpha = tiltSensorDeg;
+  pivot.rotation.x = (90 - alpha) * Math.PI / 180;
+
+  // 照明
+  const ld = S.lightDir * Math.PI / 180;
+  dir.position.set(Math.sin(ld) * 0.3, 0.4, Math.cos(ld) * 0.3 - depth / 2); dir.target.position.set(0, 0, -depth / 2);
+  dir.intensity = S.light * Math.PI * 0.6; hemi.intensity = S.light * 0.9;
+
+  drawClock(new Date(), false);
+
+  // アバター
+  lookTarget.position.copy(eye).multiplyScalar(G);
+  if (vrm) {
+    const h = vrm.humanoid;
+    const head = h?.getNormalizedBoneNode('head'), neck = h?.getNormalizedBoneNode('neck'), spine = h?.getNormalizedBoneNode('spine');
+    if (spine) spine.rotation.x = Math.sin(t * 1.6) * 0.015;
+    applyPose(performance.now() / 1000, dt);
+    if (head && S.lookAtMe) {
+      head.getWorldPosition(headPos); avatarRoot.worldToLocal(headPos);
+      tmpV.copy(eye).multiplyScalar(G); avatarRoot.worldToLocal(tmpV).sub(headPos);
+      const yaw = THREE.MathUtils.clamp(Math.atan2(tmpV.x, tmpV.z), -0.6, 0.6);
+      const pitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.5, 0.5);
+      const k = 1 - Math.exp(-dt * 6);
+      head.rotation.y += (yaw * 0.6 - head.rotation.y) * k; head.rotation.x += (-pitch * 0.6 - head.rotation.x) * k;
+      if (neck) { neck.rotation.y += (yaw * 0.4 - neck.rotation.y) * k; neck.rotation.x += (-pitch * 0.4 - neck.rotation.x) * k; }
+    } else if (head) { head.rotation.set(0, 0, 0); if (neck) neck.rotation.set(0, 0, 0); }
+    blinkT += dt;
+    if (vrm.expressionManager) {
+      let v = 0;
+      if (blinkT > nextBlink) { const p = (blinkT - nextBlink) / 0.18; v = p < 1 ? Math.sin(p * Math.PI) : 0; if (p >= 1) { blinkT = 0; nextBlink = 2 + Math.random() * 4; } }
+      vrm.expressionManager.setValue('blink', v);
+    }
+    vrm.update(dt);
+    avatarRoot.updateMatrixWorld(true);
+    placeBoard();
+  }
+
+  applyProjection();
+  renderer.render(scene, camera);
+
+  if (!hud.classList.contains('err') && !document.body.classList.contains('ui-hidden')) {
+    const now = performance.now();
+    const m = S.mode === 'face'
+      ? (faceLM ? `顔追跡 ${now - faceSeenAt < 1500 ? 'OK' : '顔なし'} ${faceFps}fps${handLM ? (now - handSeenAt < 500 ? ' 手あり' : ' 手なし') : ''}` : '顔追跡 準備中')
+      : '視点スライダー';
+    setHud(`${m}  目: x${(eye.x * 100).toFixed(0)} y${(eye.y * 100).toFixed(0)} z${(eye.z * 100).toFixed(0)}cm  設置角${alpha.toFixed(0)}°${wave.active ? '  👋' : ''}`);
+  }
+}
+
+// ---------- 起動 ----------
+onResize();
+drawClock(new Date(), true);
+applyMode();
+if (S.useTilt) enableTilt();
+loadStartupModel();
+animate();
+</script>
+</body>
+</html>
