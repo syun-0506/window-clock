@@ -81,6 +81,8 @@
   <div class="row"><label>カメラ水平画角(°)</label><input id="hfov" type="range" min="40" max="100" step="1" value="65"><span class="val" id="hfovv"></span></div>
   <div class="row"><label>瞳孔間距離(mm)</label><input id="ipd" type="range" min="55" max="72" step="0.5" value="63"><span class="val" id="ipdv"></span></div>
   <div class="row"><label>追従の滑らかさ</label><input id="smooth" type="range" min="0.05" max="0.9" step="0.05" value="0.3"><span class="val" id="smoothv"></span></div>
+  <div class="row"><label>視差の強さ</label><input id="parallaxGain" type="range" min="0.5" max="2.5" step="0.1" value="1.3"><span class="val" id="parallaxGainv"></span></div>
+  <div class="note">1.0 が物理的に正確。大きくすると頭を動かした時のズレが誇張され、飛び出し・奥行きが強く見えます。</div>
 
   <h2>手振り検出</h2>
   <div class="row"><label>手を振ったら振り返す</label><input id="waveDetect" type="checkbox" checked></div>
@@ -89,13 +91,18 @@
   <div class="note">既定では「顔の横で左右に往復する動き」を映像の差分から検出します（手が小さく写っていても反応）。HUD の「動き/反転」で反応具合を確認できます。</div>
 
   <h2>端末・設置</h2>
-  <div class="row"><label>画面の対角(インチ)</label><input id="diag" type="range" min="4" max="13" step="0.1" value="6.5"><span class="val" id="diagv"></span></div>
+  <div class="row"><label>画面の横幅(mm)</label><input id="screenW" type="number" min="40" max="200" step="0.1" value="69.8"><button class="btn sec" id="presetP8P">Pixel 8 Pro</button></div>
+  <div class="row"><label>カメラ位置(画面上端から mm)</label><input id="camInset" type="number" min="-20" max="30" step="0.5" value="4"></div>
+  <div class="note">横幅＝表示領域（光る部分）の物理的な幅。Pixel 8 Pro は公式仕様（6.7インチ・1344×2992・489ppi）から 1344/489×25.4 = 69.8mm、高さ 155.4mm。カメラ位置は正の値で「表示領域の内側（パンチホール）」、仮の値なので実機で定規確認を。HUD に算出した表示サイズ（mm）を出します。</div>
   <div class="row"><label>傾きセンサーで床を水平に</label><input id="useTilt" type="checkbox"></div>
   <div class="row"><label>設置角 手動(°)</label><input id="tiltManual" type="range" min="30" max="90" step="1" value="90"><span class="val" id="tiltManualv"></span></div>
-  <div class="row"><label>黒枠の幅(mm)</label><input id="frame" type="range" min="0" max="20" step="0.5" value="6"><span class="val" id="framev"></span></div>
+  <div class="row"><label>黒枠 左右(mm)</label><input id="frameSide" type="range" min="0" max="25" step="0.5" value="12"><span class="val" id="frameSidev"></span></div>
+  <div class="row"><label>黒枠 上(mm)</label><input id="frameTop" type="range" min="0" max="40" step="0.5" value="10"><span class="val" id="frameTopv"></span></div>
+  <div class="row"><label>黒枠 下(mm)</label><input id="frameBottom" type="range" min="0" max="50" step="0.5" value="28"><span class="val" id="frameBottomv"></span></div>
+  <div class="note">机の上のスタンドでは視点が画面より上にあるので、手前の物は下へずれて見えます。下の枠を太くすると足元・台座が枠に大きく被さり、飛び出しが強く見えます。</div>
 
   <h2>部屋</h2>
-  <div class="row"><label>奥行き(×画面幅)</label><input id="depth" type="range" min="0.4" max="4" step="0.05" value="2.6"><span class="val" id="depthv"></span></div>
+  <div class="row"><label>奥行き(×画面幅)</label><input id="depth" type="range" min="0.4" max="4" step="0.05" value="2.0"><span class="val" id="depthv"></span></div>
   <div class="row"><label>床・壁</label>
     <select id="roomStyle">
       <option value="wood">木の床・白壁</option>
@@ -115,6 +122,8 @@
   <div class="row"><label>置き場所</label>
     <select id="clockPlace">
       <option value="board">アバターが持つボード</option>
+      <option value="frame">窓枠の上部に固定（視点を動かしても隠れない）</option>
+      <option value="wall">奥の壁に掛ける（参考アプリ風）</option>
       <option value="float">空中に浮かせる</option>
     </select></div>
   <div class="row"><label>種類</label>
@@ -134,8 +143,10 @@
 
   <h2>アバター</h2>
   <div class="row"><label>表示</label><input id="showAvatar" type="checkbox" checked></div>
-  <div class="row"><label>身長(×部屋の高さ)</label><input id="avatarH" type="range" min="0.3" max="1.1" step="0.02" value="0.5"><span class="val" id="avatarHv"></span></div>
-  <div class="row"><label>前後位置</label><input id="avatarZ" type="range" min="-1" max="0.2" step="0.02" value="-0.62"><span class="val" id="avatarZv"></span></div>
+  <div class="row"><label>身長(×部屋の高さ)</label><input id="avatarH" type="range" min="0.3" max="1.1" step="0.02" value="0.62"><span class="val" id="avatarHv"></span></div>
+  <div class="row"><label>飛び出し量(mm)</label><input id="popMM" type="range" min="0" max="45" step="1" value="28"><span class="val" id="popMMv"></span></div>
+  <div class="note">ガラス面から手前に出す距離。0 にすると下の「前後位置」で部屋の中に置けます。大きいほど枠に被さるが、画面端で切れやすくなる。</div>
+  <div class="row"><label>前後位置（部屋の中）</label><input id="avatarZ" type="range" min="-1" max="0.4" step="0.01" value="-0.55"><span class="val" id="avatarZv"></span></div>
   <div class="row"><label>左右</label><input id="avatarX" type="range" min="-0.5" max="0.5" step="0.02" value="0"><span class="val" id="avatarXv"></span></div>
   <div class="row"><label>視線を向ける</label><input id="lookAtMe" type="checkbox" checked></div>
   <div class="row"><label>見切れそうなら寄ってくる</label><input id="approach" type="checkbox" checked></div>
@@ -152,6 +163,8 @@
 
   <h2>表示</h2>
   <div class="row"><button class="btn" id="fsBtn">全画面 + 画面を消さない</button><button class="btn sec" id="resetBtn">設定を初期化</button></div>
+  <div class="row"><button class="btn" id="presetStage">飛び出しステージ（既定）</button><button class="btn sec" id="presetRef">部屋の中（参考アプリ風）</button><button class="btn sec" id="presetBoard">ボード持ち</button></div>
+  <div class="note">「参考アプリ風」= 明るい木の部屋・浅め・台座・時計は奥の壁。視点や端末の設定は変えません。</div>
   <div class="note">画面を1回タップでUIの表示/非表示。全画面はブラウザの「戻る」で解除。ホーム画面に追加すると常にアドレスバーなしで開けます。</div>
 </div>
 
@@ -165,10 +178,10 @@ const DEF = {
   mode: 'slider', autoSway: true, eyeX: 0, eyeY: 0, eyeZ: 55,
   showCam: false, mirror: false, calibDist: 50, fScale: 1, hfov: 65, ipd: 63, smooth: 0.3,
   waveDetect: true, waveSens: 1, useHandModel: false,
-  diag: 6.5, useTilt: false, tiltManual: 90, frame: 6, reveal: 8,
-  depth: 2.6, roomStyle: 'wood', light: 1, lightDir: -40, shadows: true, pedestal: true, ver: 4,
-  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.32, boardY: -0.12, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
-  showAvatar: true, avatarH: 0.5, avatarZ: -0.62, avatarX: 0, lookAtMe: true, approach: true, texLimit: '1024',
+  screenW: 69.8, camInset: 4, useTilt: false, tiltManual: 90, frameSide: 12, frameTop: 10, frameBottom: 28, reveal: 8, parallaxGain: 1.6, popMM: 28,
+  depth: 2.0, roomStyle: 'wood', light: 1, lightDir: -40, shadows: true, pedestal: true, ver: 5,
+  clockPlace: 'frame', clockStyle: 'digital', showDate: true, boardSize: 0.32, boardY: -0.12, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
+  showAvatar: true, avatarH: 0.66, avatarZ: -0.55, avatarX: 0, lookAtMe: true, approach: true, texLimit: '1024',
 };
 let S = { ...DEF };
 try {
@@ -176,7 +189,9 @@ try {
   if (s) {
     const saved = JSON.parse(s); S = { ...DEF, ...saved };
     // v3: 奥行き感のための既定値変更（古い保存値を上書き）
-    if (!saved.ver || saved.ver < 4) { S.frame = DEF.frame; S.depth = DEF.depth; S.avatarZ = DEF.avatarZ; S.avatarH = DEF.avatarH; S.boardSize = DEF.boardSize; S.boardY = DEF.boardY; S.ver = 4; }
+    // v5: 飛び出しステージ配置を既定に（古い保存値を上書き）
+    if (!saved.ver || saved.ver < 7) { for (const k of ['frameSide', 'frameTop', 'frameBottom', 'depth', 'avatarZ', 'avatarH', 'boardSize', 'boardY', 'clockPlace', 'parallaxGain', 'pedestal', 'shadows', 'popMM']) S[k] = DEF[k]; S.ver = 7; }
+    delete S.frame; delete S.diag;
   }
 } catch (e) {}
 if (location.hash === '#perspective') S.mode = 'slider';
@@ -198,12 +213,17 @@ const idb = {
 // ---------- 画面の物理寸法 ----------
 let W = 0.07, H = 0.15;           // 画面全体 [m]
 let Wi = 0.06, Hi = 0.14;         // 黒枠内側（部屋の開口） [m]
+let mPerPx = 0.0001, topGap = 0, openBottom = -0.07;   // 1 CSS px あたりの実寸[m]、表示領域上端から描画領域上端までの距離[m]
 function updateScreenSize() {
-  const a = innerWidth / innerHeight;
-  const d = S.diag * 0.0254;
-  H = d / Math.sqrt(a * a + 1); W = a * H;
-  const f = S.frame / 1000;
-  Wi = Math.max(0.01, W - 2 * f); Hi = Math.max(0.01, H - 2 * f);
+  // screen.width は端末の表示領域全体の幅（CSS px）。実寸の横幅で割って 1px の大きさを得る。
+  // 描画領域（innerWidth×innerHeight）は全画面でなければ表示領域より小さいので、その実寸を使う。
+  const sw = Math.max(1, screen.width || innerWidth);
+  mPerPx = (S.screenW / 1000) / sw;
+  W = innerWidth * mPerPx; H = innerHeight * mPerPx;
+  topGap = Math.max(0, ((screen.height || innerHeight) - innerHeight)) * mPerPx * 0.85; // 上部バー分（概算：欠けの85%が上側と仮定）
+  const fs = S.frameSide / 1000, ft = S.frameTop / 1000, fb = S.frameBottom / 1000;
+  Wi = Math.max(0.01, W - 2 * fs); Hi = Math.max(0.01, H - ft - fb);
+  openBottom = -H / 2 + fb;   // 開口の下端（画面座標）
 }
 
 // ---------- three.js ----------
@@ -322,7 +342,7 @@ function styleTex(style, key) { const k = style + ':' + key; if (!texCache[k]) t
 
 // ---------- 部屋の構築 ----------
 let depth = 0.1, Hr = 0.15;
-let blobShadow = null, pedestal = null, pedH = 0, pedR = 0;
+let blobShadow = null, pedestal = null, stage = null, pedH = 0, pedR = 0;
 function buildRoom() {
   if (roomGroup) { world.remove(roomGroup); roomGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   if (frameMesh) { scene.remove(frameMesh); frameMesh.geometry.dispose(); }
@@ -369,10 +389,29 @@ function buildRoom() {
     const so = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), new THREE.ShadowMaterial({ opacity: st.shadowOverlay, clippingPlanes: [glassClip] }));
     so.rotation.x = -Math.PI / 2; so.position.set(0, 0.0003, -rv - dz / 2); so.receiveShadow = true; roomGroup.add(so);
   }
+  // ステージ：アバターがガラスより手前（avatarZ > 0）に立つ場合、床を開口の下端から手前へ張り出す。
+  // 手前にある物体は視点を動かすと黒枠に重なって見え、「画面から出ている」ように知覚される。
+  stage = null;
+  const homeZ = S.popMM > 0 ? S.popMM / 1000 : S.avatarZ * depth;
+  const stageLen = homeZ > 0 ? homeZ + Hi * 0.17 : 0;
+  if (stageLen > 0) {
+    const smat = st.unlit ? new THREE.MeshBasicMaterial({ map: styleTex(S.roomStyle, 'floor') }) : new THREE.MeshStandardMaterial({ map: styleTex(S.roomStyle, 'floor'), roughness: 0.9, metalness: 0 });
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(Wi, stageLen), smat); top.rotation.x = -Math.PI / 2; top.position.set(0, 0, stageLen / 2); top.receiveShadow = S.shadows;
+    const lipMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.85 });
+    const lipH = Hi * 0.035;
+    const lip = new THREE.Mesh(new THREE.PlaneGeometry(Wi, lipH), lipMat); lip.position.set(0, -lipH / 2, stageLen);
+    const lipL = new THREE.Mesh(new THREE.PlaneGeometry(stageLen, lipH), lipMat); lipL.rotation.y = -Math.PI / 2; lipL.position.set(-Wi / 2, -lipH / 2, stageLen / 2);
+    const lipR = new THREE.Mesh(new THREE.PlaneGeometry(stageLen, lipH), lipMat); lipR.rotation.y = Math.PI / 2; lipR.position.set(Wi / 2, -lipH / 2, stageLen / 2);
+    stage = new THREE.Group(); stage.add(top, lip, lipL, lipR); roomGroup.add(stage);
+    if (st.unlit && S.shadows && st.shadowOverlay > 0) {
+      const so2 = new THREE.Mesh(new THREE.PlaneGeometry(Wi, stageLen), new THREE.ShadowMaterial({ opacity: st.shadowOverlay }));
+      so2.rotation.x = -Math.PI / 2; so2.position.set(0, 0.0003, stageLen / 2); so2.receiveShadow = true; stage.add(so2);
+    }
+  }
   // 台座（参考アプリ同様。楕円の見え方と影が奥行きの手掛かりになる）
   pedestal = null;
   if (S.pedestal) {
-    pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48), new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.45, metalness: 0.35, clippingPlanes: [glassClip] }));
+    pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48), new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.45, metalness: 0.35 }));
     pedestal.castShadow = S.shadows; pedestal.receiveShadow = S.shadows; roomGroup.add(pedestal);
   }
   blobShadow = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: st.shadow, depthWrite: false }));
@@ -380,7 +419,7 @@ function buildRoom() {
   world.add(roomGroup);
 
   const shape = new THREE.Shape(); shape.moveTo(-W / 2, -H / 2); shape.lineTo(W / 2, -H / 2); shape.lineTo(W / 2, H / 2); shape.lineTo(-W / 2, H / 2); shape.closePath();
-  const hole = new THREE.Path(); hole.moveTo(-Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, Hi / 2); hole.lineTo(-Wi / 2, Hi / 2); hole.closePath();
+  const hole = new THREE.Path(); hole.moveTo(-Wi / 2, openBottom); hole.lineTo(Wi / 2, openBottom); hole.lineTo(Wi / 2, openBottom + Hi); hole.lineTo(-Wi / 2, openBottom + Hi); hole.closePath();
   shape.holes.push(hole);
   frameMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   frameMesh.position.z = 0.0002; scene.add(frameMesh);
@@ -569,8 +608,19 @@ let avatarScale = 1;
 function layoutObjects() {
   const cw = Wi * S.clockSize, ch = cw / 2;
   clockMesh.scale.set(cw / 2, ch, 1);
-  clockMesh.position.set(S.clockX * Wi, S.clockY * Hr, S.clockZ * depth);
-  clockMesh.visible = S.clockPlace === 'float';
+  if (S.clockPlace === 'wall') {
+    const ww = Wi * 0.62, wh = ww / 2;
+    clockMesh.scale.set(ww / 2, wh, 1);
+    clockMesh.position.set(0, Hr * 0.74, -depth + 0.001);
+  } else if (S.clockPlace === 'frame') {
+    // 窓枠の内側上部、ガラス面のすぐ奥。ガラス面に近いので視点を動かしても枠に対してほぼ動かず、常に見える
+    const ww = Wi * 0.6, wh = ww / 2;
+    clockMesh.scale.set(ww / 2, wh, 1);
+    clockMesh.position.set(0, Hi - wh / 2 - Hi * 0.02, -0.002);
+  } else {
+    clockMesh.position.set(S.clockX * Wi, S.clockY * Hr, S.clockZ * depth);
+  }
+  clockMesh.visible = S.clockPlace === 'float' || S.clockPlace === 'wall' || S.clockPlace === 'frame';
   board.visible = S.clockPlace === 'board' && !!vrm && rig.ok && S.showAvatar;
   if (avatarRoot) {
     const target = Hr * S.avatarH;
@@ -578,16 +628,16 @@ function layoutObjects() {
     G = 1 / avatarScale;
     avatarRoot.scale.setScalar(avatarScale);
     avatarRoot.visible = S.showAvatar;
-    walker.home.set(S.avatarX * Wi, S.avatarZ * depth);
+    walker.home.set(S.avatarX * Wi, S.popMM > 0 ? S.popMM / 1000 : S.avatarZ * depth);
     const ah = avatarNativeHeight * avatarScale;         // 部屋単位での身長
-    pedR = ah * 0.26; pedH = S.pedestal ? ah * 0.035 : 0;
+    pedR = ah * 0.28; pedH = S.pedestal ? ah * 0.035 : 0;
     if (pedestal) { pedestal.scale.set(pedR, Math.max(pedH, 0.0001), pedR); pedestal.position.set(walker.home.x, pedH / 2, walker.home.y); }
     // ボード寸法（アバター実寸 m）
     const bw = avatarNativeHeight * S.boardSize, bh = bw / 2;
     boardBack.scale.set(bw, bh, 1); boardEdge.scale.set(bw * 0.965, bh * 0.93, 1); boardFace.scale.set(bw * 0.84, bh * 0.86, 1);
     board.userData.bw = bw; board.userData.bh = bh;
   } else { G = 1; }
-  pivot.scale.setScalar(G); pivot.position.set(0, -Hi / 2 * G, 0);
+  pivot.scale.setScalar(G); pivot.position.set(0, openBottom * G, 0);
   if (frameMesh) frameMesh.scale.setScalar(G);
   // シャドウカメラ（シーン単位 = 部屋単位 × G）
   const sz = Math.max(Wi, depth, Hr) * G;
@@ -700,7 +750,7 @@ function updateWalker(dt) {
     _pa.set(walker.pos.x - halfW, cy, walker.pos.y); world.localToWorld(_pa);
     _pb.set(walker.pos.x + halfW, cy, walker.pos.y); world.localToWorld(_pb);
     _p.project(camera); _pa.project(camera); _pb.project(camera);
-    const lim = (Wi / W) * 0.93;
+    const lim = walker.pos.y > 0 ? 0.96 : (Wi / W) * 0.93;   // ガラスより手前なら物理的な画面端が限界
     const a = (_pb.x - _pa.x) / (2 * halfW); // NDC/部屋x
     let dx = 0;
     if (_pa.x < -lim) dx = (-lim - _pa.x) / a; else if (_pb.x > lim) dx = (lim - _pb.x) / a;
@@ -758,6 +808,8 @@ function updateWalker(dt) {
 const TL = V(), TR = V(), TW = V(), WPOS = V(), POLE_T = V(), PALM_T = V();
 const POLE_L = new THREE.Vector3(1, -1, -0.2), POLE_R = new THREE.Vector3(-1, -1, -0.2), POLE_WAVE = new THREE.Vector3(-1, -0.3, 0.3);
 const PALM_L = new THREE.Vector3(-1, 0, 0), PALM_R = new THREE.Vector3(1, 0, 0), PALM_WAVE = V();
+const POLE_DOWN_L = new THREE.Vector3(0.3, -0.2, -1), POLE_DOWN_R = new THREE.Vector3(-0.3, -0.2, -1);
+const PALM_IN_L = new THREE.Vector3(-1, 0, 0.3), PALM_IN_R = new THREE.Vector3(1, 0, 0.3);
 const headPos = V(), tmpV = V();
 let blinkT = 0, nextBlink = 2, idleT = Math.random() * 10;
 function updateAvatar(dt, t) {
@@ -786,7 +838,7 @@ function updateAvatar(dt, t) {
       head.getWorldPosition(headPos); avatarRoot.worldToLocal(headPos);
       tmpV.copy(eye).multiplyScalar(G); avatarRoot.worldToLocal(tmpV).sub(headPos); // 目の位置をアバターローカル（実寸）へ
       yaw = THREE.MathUtils.clamp(Math.atan2(tmpV.x, tmpV.z), -0.7, 0.7);
-      pitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.5, 0.5);
+      pitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.35, 0.5); // 下向きは控えめ（顔が隠れないように）
     }
     const k = 1 - Math.exp(-dt * 6);
     const roll = 0.10 * wb + sway * 0.5;
@@ -797,14 +849,23 @@ function updateAvatar(dt, t) {
   // --- 腕：ボードを両側から持つ（手はボードの外側＝貫通しない） ---
   if (rig.ok) {
     avatarRoot.updateMatrixWorld(true);
+    const holding = S.clockPlace === 'board';
     const bw = board.userData.bw || 0.3, bh = board.userData.bh || 0.15;
-    const yHold = rig.shoulderY + S.boardY * avatarNativeHeight / 1.6 * 1.0; // 胸〜腹の高さ
-    const zHold = 0.26 * avatarNativeHeight / 1.6;
-    const grip = 0.02;
-    TL.set(bw / 2 + grip, yHold, zHold);
-    TR.set(-(bw / 2 + grip), yHold, zHold);
-    const holdFinger = 1.2;
-    poseArm('left', TL, POLE_L, PALM_L, 0, 0);
+    const k16 = avatarNativeHeight / 1.6;
+    let yHold, zHold, grip, holdFinger;
+    if (holding) {
+      yHold = rig.shoulderY + S.boardY * k16;                   // 胸〜腹の高さ
+      yHold = Math.min(yHold, rig.shoulderY - bh / 2 - 0.03);   // ボード上端は必ず肩より下（顔を隠さない）
+      zHold = 0.26 * k16; grip = 0.02; holdFinger = 1.2;
+      TL.set(bw / 2 + grip, yHold, zHold);
+      TR.set(-(bw / 2 + grip), yHold, zHold);
+    } else {
+      // 持ち物なし：腕を体の横に自然に下ろす（肘を少し曲げ、手は太ももの横やや前）
+      yHold = rig.hipsY - 0.02 * k16; zHold = 0.07 * k16; grip = 0; holdFinger = 0.55;
+      TL.set(rig.left.S.x + 0.09 * k16, yHold, zHold);
+      TR.set(rig.right.S.x - 0.09 * k16, yHold, zHold);
+    }
+    poseArm('left', TL, holding ? POLE_L : POLE_DOWN_L, holding ? PALM_L : PALM_IN_L, 0, holding ? 0 : 0.15);
     curlFingers('left', holdFinger);
     if (wb > 0.001) {
       // 右手: 肩の斜め上（頭の横）で、前腕を左右に小さく往復（約 2.5 Hz, ±約 17°）。手のひらはこちら向き
@@ -820,7 +881,7 @@ function updateAvatar(dt, t) {
       poseArm('right', TW, POLE_T, PALM_T, osc * 0.35 * wb, -0.15 * wb);
       curlFingers('right', holdFinger * (1 - wb) + 0.35 * wb);
     } else {
-      poseArm('right', TR, POLE_R, PALM_R, 0, 0);
+      poseArm('right', TR, holding ? POLE_R : POLE_DOWN_R, holding ? PALM_R : PALM_IN_R, 0, holding ? 0 : -0.15);
       curlFingers('right', holdFinger);
     }
     // ボード：両手持ちの中心。片手になると持っている側（左手=+X）を支点に反対側が少し下がる
@@ -962,7 +1023,7 @@ function updateFace() {
       const mx = (L.x + R.x) / 2 - 0.5, my = (L.y + R.y) / 2 - 0.5;
       let x = mx * vw * Z / fpx, y = -my * vh * Z / fpx;
       if (!S.mirror) x = -x;
-      eyeRaw.set(x, y + H / 2 + 0.005, Z);
+      eyeRaw.set(x, y + H / 2 + topGap - S.camInset / 1000, Z);   // カメラは表示領域の上端中央付近
       faceSeenAt = now;
     }
   } else if (now - faceSeenAt > 800) { faceBox = null; }
@@ -996,7 +1057,8 @@ async function enableTilt() {
 
 // ---------- オフアクシス射影 ----------
 function applyProjection() {
-  const ex = eye.x * G, ey = eye.y * G, ez = Math.max(0.05, eye.z) * G;
+  const g = S.parallaxGain || 1;
+  const ex = eye.x * g * G, ey = eye.y * g * G, ez = Math.max(0.05, eye.z) * G;
   const n = 0.02 * G, f = 20 * G;
   const k = n / ez;
   const Wg = W * G, Hg = H * G;
@@ -1009,11 +1071,11 @@ function applyProjection() {
 }
 
 // ---------- UI ----------
-const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'waveSens', 'diag', 'tiltManual', 'frame', 'reveal', 'depth', 'light', 'lightDir', 'boardSize', 'boardY', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
-const numbers = ['calibDist'];
+const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'parallaxGain', 'waveSens', 'tiltManual', 'frameSide', 'frameTop', 'frameBottom', 'reveal', 'depth', 'popMM', 'light', 'lightDir', 'boardSize', 'boardY', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
+const numbers = ['calibDist', 'screenW', 'camInset'];
 const checks = ['autoSway', 'showCam', 'waveDetect', 'useHandModel', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe', 'approach', 'shadows', 'pedestal'];
 const selects = ['mode', 'roomStyle', 'clockPlace', 'clockStyle', 'texLimit'];
-const needsRoom = new Set(['diag', 'frame', 'reveal', 'depth', 'roomStyle', 'shadows', 'pedestal']);
+const needsRoom = new Set(['screenW', 'frameSide', 'frameTop', 'frameBottom', 'reveal', 'depth', 'roomStyle', 'shadows', 'pedestal', 'popMM']);
 const needsLayout = new Set(['clockPlace', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX', 'showAvatar']);
 function showVal(id) { const v = $(id + 'v'); if (v) v.textContent = String(S[id]); }
 function bindUI() {
@@ -1034,7 +1096,7 @@ function onChange(id) {
   if (id === 'showCam') document.body.classList.toggle('showcam', !!S.showCam);
   if (id === 'eyeX') { S.autoSway = false; $('autoSway').checked = false; save(); }
   if (id === 'texLimit') setHud('テクスチャ上限はモデルを次に読み込んだ時から有効です', false, 4000);
-  if (id === 'avatarX' || id === 'avatarZ') walker.reset();
+  if (id === 'avatarX' || id === 'avatarZ' || id === 'popMM') walker.reset();
 }
 function applyMode() {
   const face = S.mode === 'face';
@@ -1048,6 +1110,11 @@ $('closePanel').addEventListener('click', () => $('panel').classList.remove('ope
 $('waveBtn').addEventListener('click', startWave);
 canvas.addEventListener('pointerdown', () => { if ($('panel').classList.contains('open')) { $('panel').classList.remove('open'); return; } document.body.classList.toggle('ui-hidden'); });
 $('resetBtn').addEventListener('click', () => { S = { ...DEF }; save(); location.reload(); });
+function applyPreset(p) { Object.assign(S, p); save(); location.reload(); }
+$('presetP8P').addEventListener('click', () => { S.screenW = 69.8; S.camInset = 4; $('screenW').value = 69.8; $('camInset').value = 4; save(); updateScreenSize(); buildRoom(); });
+$('presetStage').addEventListener('click', () => applyPreset({ roomStyle: 'wood', depth: 2.0, frameSide: 12, frameTop: 10, frameBottom: 28, reveal: 8, shadows: true, pedestal: true, clockPlace: 'frame', avatarH: 0.66, popMM: 28, avatarX: 0, parallaxGain: 1.6 }));
+$('presetRef').addEventListener('click', () => applyPreset({ roomStyle: 'wood', depth: 1.6, frameSide: 8, frameTop: 8, frameBottom: 8, popMM: 0, reveal: 8, shadows: true, pedestal: true, clockPlace: 'wall', avatarH: 0.46, avatarZ: -0.55, avatarX: 0, light: 1.1, lightDir: -40, parallaxGain: 1.0 }));
+$('presetBoard').addEventListener('click', () => applyPreset({ roomStyle: 'wood', depth: 2.6, frameSide: 8, frameTop: 8, frameBottom: 8, popMM: 0, reveal: 8, shadows: true, pedestal: true, clockPlace: 'board', boardSize: 0.32, boardY: -0.12, avatarH: 0.5, avatarZ: -0.62, avatarX: 0, parallaxGain: 1.0 }));
 $('forgetModel').addEventListener('click', async () => { try { await idb.del('userModel'); } catch (e) {} location.reload(); });
 $('calibBtn').addEventListener('click', () => {
   if (S.mode !== 'face' || performance.now() - faceSeenAt > 1000) { setHud('顔追跡モードで顔が映っている状態で押してください', true, 4000); return; }
@@ -1116,7 +1183,7 @@ function animate() {
     const m = S.mode === 'face'
       ? (faceLM ? `顔追跡 ${now - faceSeenAt < 1500 ? 'OK' : '顔なし'} ${faceFps}fps` + (S.waveDetect ? `  動き${(motion.frac * 100).toFixed(1)}% 反転${motion.rev}` : '') + (handLM ? (now - handSeenAt < 500 ? ' 手あり' : ' 手なし') : '') : '顔追跡 準備中')
       : '視点スライダー';
-    setHud(`${m}\n目: x${(eye.x * 100).toFixed(0)} y${(eye.y * 100).toFixed(0)} z${(eye.z * 100).toFixed(0)}cm  設置角${alpha.toFixed(0)}°${wave.active ? '  👋' : ''}${walker.approaching ? '  →寄る' : ''}`);
+    setHud(`${m}\n目: x${(eye.x * 100).toFixed(0)} y${(eye.y * 100).toFixed(0)} z${(eye.z * 100).toFixed(0)}cm  設置角${alpha.toFixed(0)}°  表示${(W * 1000).toFixed(0)}×${(H * 1000).toFixed(0)}mm${wave.active ? '  👋' : ''}${walker.approaching ? '  →寄る' : ''}`);
   }
 }
 
