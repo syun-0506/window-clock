@@ -5,20 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
 <title>3D Window Clock</title>
 <style>
   :root { color-scheme: dark; }
   html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; color:#eee; }
   #c { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
   #video { position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; pointer-events:none; }
-  #hud { position:fixed; left:0; top:0; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 6px calc(env(safe-area-inset-left, 0px) + 10px); font-size:11px; color:#9a9; background:rgba(0,0,0,.35); border-radius:0 0 8px 0; pointer-events:none; white-space:pre-line; max-width:70vw; }
+  body.showcam #video { width:120px; height:auto; opacity:1; left:calc(env(safe-area-inset-left,0px) + 8px); top:auto; bottom:calc(env(safe-area-inset-bottom,0px) + 56px); transform:scaleX(-1); border:1px solid #666; border-radius:6px; z-index:5; }
+  body.ui-hidden.showcam #video { opacity:0; }
+  #hud { position:fixed; left:0; top:0; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 6px calc(env(safe-area-inset-left, 0px) + 10px); font-size:11px; color:#9a9; background:rgba(0,0,0,.6); border-radius:0 0 8px 0; pointer-events:none; white-space:pre-line; max-width:72vw; }
   #hud.err { color:#f88; }
   .ui-hidden #hud, .ui-hidden #gear, .ui-hidden #bar { display:none; }
   #gear { position:fixed; right: calc(env(safe-area-inset-right, 0px) + 10px); top: calc(env(safe-area-inset-top, 0px) + 8px); width:40px; height:40px; border-radius:50%; background:rgba(20,20,20,.7); border:1px solid #444; color:#ddd; font-size:20px; line-height:40px; text-align:center; cursor:pointer; user-select:none; }
   #bar { position:fixed; left:0; right:0; bottom:0; padding:6px calc(env(safe-area-inset-right,0px)+10px) calc(env(safe-area-inset-bottom,0px)+8px) calc(env(safe-area-inset-left,0px)+10px); display:flex; gap:8px; align-items:center; background:linear-gradient(transparent, rgba(0,0,0,.6)); }
   #bar input[type=range] { flex:1; }
+  #bar .spacer { flex:1; }
   #bar label { font-size:11px; color:#aaa; white-space:nowrap; }
-  #bar button { background:#345; color:#fff; border:0; border-radius:6px; padding:6px 10px; font-size:12px; }
+  #bar button { background:#345; color:#fff; border:0; border-radius:6px; padding:6px 10px; font-size:14px; }
   #panel { position:fixed; right:0; top:0; bottom:0; width:min(92vw, 360px); background:rgba(14,14,16,.96); border-left:1px solid #333; overflow-y:auto; padding: calc(env(safe-area-inset-top,0px)+12px) 14px calc(env(safe-area-inset-bottom,0px)+24px); box-sizing:border-box; transform:translateX(100%); transition:transform .25s; z-index:10; -webkit-overflow-scrolling:touch; }
   #panel.open { transform:translateX(0); }
   #panel h2 { font-size:15px; margin:14px 0 6px; color:#fff; border-bottom:1px solid #333; padding-bottom:4px; }
@@ -26,6 +30,7 @@
   .row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0; font-size:13px; }
   .row label { flex:0 0 42%; color:#ccc; }
   .row input[type=range] { flex:1; min-width:0; }
+  .row input[type=number] { width:64px; background:#222; color:#eee; border:1px solid #444; border-radius:4px; padding:4px; font-size:13px; }
   .row select, .row input[type=file] { flex:1; min-width:0; background:#222; color:#eee; border:1px solid #444; border-radius:4px; padding:4px; font-size:13px; }
   .row .val { flex:0 0 52px; text-align:right; font-variant-numeric:tabular-nums; color:#9cf; font-size:12px; }
   .row input[type=checkbox] { width:20px; height:20px; }
@@ -51,8 +56,10 @@
 <div id="hud">起動中…</div>
 <div id="gear" title="設定">⚙</div>
 <div id="bar">
-  <label>視点 左</label><input id="eyeX" type="range" min="-30" max="30" step="0.5" value="0"><label>右</label>
+  <label id="lblL">視点 左</label><input id="eyeX" type="range" min="-30" max="30" step="0.5" value="0"><label id="lblR">右</label>
+  <span class="spacer" id="barSpacer" style="display:none"></span>
   <button id="waveBtn" title="手を振るテスト">👋</button>
+  <button id="fsBtn2" title="全画面（UIも隠す）">⛶</button>
 </div>
 
 <div id="panel">
@@ -66,12 +73,20 @@
   <div class="row"><label>自動で左右に揺らす</label><input id="autoSway" type="checkbox"></div>
   <div class="row"><label>視点の高さ</label><input id="eyeY" type="range" min="-30" max="30" step="0.5" value="0"><span class="val" id="eyeYv"></span></div>
   <div class="row"><label>視点までの距離</label><input id="eyeZ" type="range" min="25" max="120" step="1" value="55"><span class="val" id="eyeZv"></span></div>
-  <div class="note">顔追跡・手振り検出は https で開いたページでのみ動作します（ブラウザの仕様）。カメラ映像は端末内で処理し、送信しません。</div>
-  <div class="row"><label>手を振ったら振り返す</label><input id="waveDetect" type="checkbox" checked></div>
+  <div class="note">顔追跡・手振り検出は https で開いたページでのみ動作します。カメラ映像は端末内で処理し、送信しません。</div>
+  <div class="row"><label>カメラ映像を小さく表示</label><input id="showCam" type="checkbox"></div>
   <div class="row"><label>左右反転</label><input id="mirror" type="checkbox"></div>
+  <div class="row"><label>距離キャリブレーション</label><input id="calibDist" type="number" min="20" max="150" step="1" value="50"><span style="font-size:12px">cm</span><button class="btn" id="calibBtn">今の距離で合わせる</button></div>
+  <div class="note">顔を画面から上の距離に置いてボタンを押すと、距離推定の倍率を合わせます（HUDの z が実際の距離になるように）。</div>
   <div class="row"><label>カメラ水平画角(°)</label><input id="hfov" type="range" min="40" max="100" step="1" value="65"><span class="val" id="hfovv"></span></div>
   <div class="row"><label>瞳孔間距離(mm)</label><input id="ipd" type="range" min="55" max="72" step="0.5" value="63"><span class="val" id="ipdv"></span></div>
   <div class="row"><label>追従の滑らかさ</label><input id="smooth" type="range" min="0.05" max="0.9" step="0.05" value="0.3"><span class="val" id="smoothv"></span></div>
+
+  <h2>手振り検出</h2>
+  <div class="row"><label>手を振ったら振り返す</label><input id="waveDetect" type="checkbox" checked></div>
+  <div class="row"><label>感度</label><input id="waveSens" type="range" min="0.5" max="2" step="0.1" value="1"><span class="val" id="waveSensv"></span></div>
+  <div class="row"><label>手の骨格モデルも使う(重い)</label><input id="useHandModel" type="checkbox"></div>
+  <div class="note">既定では「顔の横で左右に往復する動き」を映像の差分から検出します（手が小さく写っていても反応）。HUD の「動き/反転」で反応具合を確認できます。</div>
 
   <h2>端末・設置</h2>
   <div class="row"><label>画面の対角(インチ)</label><input id="diag" type="range" min="4" max="13" step="0.1" value="6.5"><span class="val" id="diagv"></span></div>
@@ -87,6 +102,8 @@
       <option value="tatami">和室</option>
       <option value="night">夜の部屋</option>
       <option value="grid">青いグリッド</option>
+      <option value="white">真っ白</option>
+      <option value="dark">真っ暗</option>
     </select></div>
   <div class="row"><label>照明の強さ</label><input id="light" type="range" min="0.2" max="3" step="0.05" value="1"><span class="val" id="lightv"></span></div>
   <div class="row"><label>照明の向き(°)</label><input id="lightDir" type="range" min="-180" max="180" step="5" value="-40"><span class="val" id="lightDirv"></span></div>
@@ -105,7 +122,8 @@
       <option value="minimal">Minimal</option>
     </select></div>
   <div class="row"><label>日付を表示</label><input id="showDate" type="checkbox" checked></div>
-  <div class="row"><label>ボードの大きさ</label><input id="boardSize" type="range" min="0.2" max="0.6" step="0.01" value="0.4"><span class="val" id="boardSizev"></span></div>
+  <div class="row"><label>ボードの幅(×身長)</label><input id="boardSize" type="range" min="0.12" max="0.3" step="0.01" value="0.2"><span class="val" id="boardSizev"></span></div>
+  <div class="row"><label>ボードの高さ位置</label><input id="boardY" type="range" min="-0.3" max="0.1" step="0.01" value="-0.14"><span class="val" id="boardYv"></span></div>
   <div class="row"><label>（空中）大きさ</label><input id="clockSize" type="range" min="0.2" max="1" step="0.02" value="0.5"><span class="val" id="clockSizev"></span></div>
   <div class="row"><label>（空中）前後</label><input id="clockZ" type="range" min="-1" max="0.3" step="0.02" value="-0.5"><span class="val" id="clockZv"></span></div>
   <div class="row"><label>（空中）高さ</label><input id="clockY" type="range" min="0" max="1" step="0.02" value="0.76"><span class="val" id="clockYv"></span></div>
@@ -117,6 +135,7 @@
   <div class="row"><label>前後位置</label><input id="avatarZ" type="range" min="-1" max="0.2" step="0.02" value="-0.5"><span class="val" id="avatarZv"></span></div>
   <div class="row"><label>左右</label><input id="avatarX" type="range" min="-0.5" max="0.5" step="0.02" value="0"><span class="val" id="avatarXv"></span></div>
   <div class="row"><label>視線を向ける</label><input id="lookAtMe" type="checkbox" checked></div>
+  <div class="row"><label>見切れそうなら寄ってくる</label><input id="approach" type="checkbox" checked></div>
   <div class="row"><label>テクスチャ上限(px)</label>
     <select id="texLimit">
       <option value="1024">1024（省メモリ・推奨）</option>
@@ -126,11 +145,11 @@
   <div class="row"><label>自分のモデル(.vrm/.glb)</label><input id="modelFile" type="file" accept=".vrm,.glb,model/gltf-binary"></div>
   <div class="row"><button class="btn sec" id="forgetModel">保存したモデルを消して既定に戻す</button></div>
   <div class="note">読み込んだモデルはこの端末のブラウザ内（IndexedDB）に保存され、次回から自動で読み込まれます。サーバーには送られません。</div>
-  <div class="note" id="credit">同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0（モデル内メタデータ: 再配布可・改変再配布可・クレジット表記必須）</div>
+  <div class="note" id="credit">同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0</div>
 
   <h2>表示</h2>
   <div class="row"><button class="btn" id="fsBtn">全画面 + 画面を消さない</button><button class="btn sec" id="resetBtn">設定を初期化</button></div>
-  <div class="note">画面を1回タップでUIの表示/非表示。設定は端末内に保存されます。</div>
+  <div class="note">画面を1回タップでUIの表示/非表示。全画面はブラウザの「戻る」で解除。ホーム画面に追加すると常にアドレスバーなしで開けます。</div>
 </div>
 
 <script type="module">
@@ -141,11 +160,12 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 // ---------- 設定 ----------
 const DEF = {
   mode: 'slider', autoSway: true, eyeX: 0, eyeY: 0, eyeZ: 55,
-  waveDetect: true, mirror: false, hfov: 65, ipd: 63, smooth: 0.3,
+  showCam: false, mirror: false, calibDist: 50, fScale: 1, hfov: 65, ipd: 63, smooth: 0.3,
+  waveDetect: true, waveSens: 1, useHandModel: false,
   diag: 6.5, useTilt: false, tiltManual: 90, frame: 4,
   depth: 1.4, roomStyle: 'wood', light: 1, lightDir: -40,
-  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.4, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
-  showAvatar: true, avatarH: 0.74, avatarZ: -0.5, avatarX: 0, lookAtMe: true, texLimit: '1024',
+  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.2, boardY: -0.14, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
+  showAvatar: true, avatarH: 0.74, avatarZ: -0.5, avatarX: 0, lookAtMe: true, approach: true, texLimit: '1024',
 };
 let S = { ...DEF };
 try { const s = localStorage.getItem('win3d-settings'); if (s) S = { ...DEF, ...JSON.parse(s) }; } catch (e) {}
@@ -154,7 +174,8 @@ function save() { try { localStorage.setItem('win3d-settings', JSON.stringify(S)
 
 const $ = id => document.getElementById(id);
 const hud = $('hud');
-function setHud(msg, err) { hud.textContent = msg; hud.classList.toggle('err', !!err); }
+let hudHold = 0;
+function setHud(msg, err, holdMs) { hud.textContent = msg; hud.classList.toggle('err', !!err); hudHold = holdMs ? performance.now() + holdMs : 0; }
 
 // ---------- IndexedDB（読み込んだモデルの端末内保存） ----------
 const idb = {
@@ -165,7 +186,6 @@ const idb = {
 };
 
 // ---------- 画面の物理寸法 ----------
-// ブラウザは物理DPIを取れないため、対角インチは設定値（既定6.5"）に依存する。
 let W = 0.07, H = 0.15;           // 画面全体 [m]
 let Wi = 0.06, Hi = 0.14;         // 黒枠内側（部屋の開口） [m]
 function updateScreenSize() {
@@ -186,22 +206,16 @@ renderer.localClippingEnabled = true;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// カメラ: 位置=目、向き=画面法線。射影行列は毎フレーム手計算（オフアクシス射影）。
 const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 20);
 scene.add(camera);
-
-// 画面平面 z=0 で部屋を切る（壁が画面より手前に出ないように）。手前に出す物体には適用しない。
 const glassClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
 
-// 傾き支点: 開口の下端。pivot.rotation.x = 設置角から求めた「後ろ倒し角」。
 const pivot = new THREE.Group(); scene.add(pivot);
 const world = new THREE.Group(); pivot.add(world);
 let roomGroup = null, frameMesh = null;
-
 const hemi = new THREE.HemisphereLight(0xffffff, 0x667788, 1.0); world.add(hemi);
 const dir = new THREE.DirectionalLight(0xffffff, 1.0); world.add(dir); world.add(dir.target);
-// シーン全体の倍率。アバターのワールドスケールを 1（＝実寸 m）に保つために、部屋・画面・目の座標側を G 倍する
-// （スプリングボーン等は実寸前提で計算されるため、アバターを縮小すると揺れものが破綻する）
+// シーン全体の倍率。アバターのワールドスケールを 1（実寸 m）に保つため、部屋・画面・目の座標側を G 倍する
 let G = 1;
 
 // ---------- 手続きテクスチャ ----------
@@ -216,6 +230,7 @@ function makeTex(w, h, draw, repeat = [1, 1]) {
 function noise(ctx, w, h, amt, n = 4000) {
   for (let i = 0; i < n; i++) { ctx.fillStyle = `rgba(0,0,0,${Math.random() * amt})`; ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
 }
+const solid = col => () => makeTex(16, 16, (c, w, h) => { c.fillStyle = col; c.fillRect(0, 0, w, h); });
 const STYLES = {
   wood: {
     floor: () => makeTex(512, 512, (c, w, h) => {
@@ -231,8 +246,7 @@ const STYLES = {
     }, [2, 4]),
     wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#e9e4da'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.05, 3000); }, [2, 2]),
     back: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#d9d2c5'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.05, 3000); }, [2, 2]),
-    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#f2efe9'; c.fillRect(0, 0, w, h); }),
-    hemi: [0xffffff, 0x887766], sun: 0xfff2e0,
+    ceil: solid('#f2efe9'), hemi: [0xffffff, 0x887766], sun: 0xfff2e0, shadow: 0.35,
   },
   tatami: {
     floor: () => makeTex(512, 512, (c, w, h) => {
@@ -245,8 +259,7 @@ const STYLES = {
       c.fillStyle = '#e7dcc0'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#5a3a1e'; for (let i = 0; i <= 4; i++) { c.fillRect(i * w / 4 - 4, 0, 8, h); } for (let j = 0; j <= 6; j++) { c.fillRect(0, j * h / 6 - 3, w, 6); }
     }, [1, 1]),
-    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#6b4a2b'; c.fillRect(0, 0, w, h); }),
-    hemi: [0xfff4dc, 0x665533], sun: 0xffe8c0,
+    ceil: solid('#6b4a2b'), hemi: [0xfff4dc, 0x665533], sun: 0xffe8c0, shadow: 0.35,
   },
   night: {
     floor: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#2a2a33'; c.fillRect(0, 0, w, h); noise(c, w, h, 0.2, 6000); }, [3, 6]),
@@ -256,28 +269,33 @@ const STYLES = {
       for (let i = 0; i < 160; i++) { c.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.7})`; const r = Math.random() * 1.5; c.beginPath(); c.arc(Math.random() * w, Math.random() * h * 0.6, r, 0, 7); c.fill(); }
       const g = c.createLinearGradient(0, h * 0.55, 0, h); g.addColorStop(0, 'rgba(40,20,60,0)'); g.addColorStop(1, 'rgba(90,40,120,.6)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
     }, [1, 1]),
-    ceil: () => makeTex(64, 64, (c, w, h) => { c.fillStyle = '#101018'; c.fillRect(0, 0, w, h); }),
-    hemi: [0x8899ff, 0x221133], sun: 0xaabbff,
+    ceil: solid('#101018'), hemi: [0x8899ff, 0x221133], sun: 0xaabbff, shadow: 0.5,
   },
   grid: {
     floor: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#061428'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a7fff'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 8]),
     wall: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#071a33'; c.fillRect(0, 0, w, h); c.strokeStyle = '#1f5fbf'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [8, 4]),
     back: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#05122a'; c.fillRect(0, 0, w, h); c.strokeStyle = '#1f5fbf'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 4]),
     ceil: () => makeTex(256, 256, (c, w, h) => { c.fillStyle = '#061428'; c.fillRect(0, 0, w, h); c.strokeStyle = '#2a7fff'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); }, [4, 8]),
-    hemi: [0xffffff, 0x224488], sun: 0xffffff,
+    hemi: [0xffffff, 0x224488], sun: 0xffffff, shadow: 0.5,
   },
+  // 真っ白/真っ暗は照明の影響を受けない unlit で塗りつぶす
+  white: { floor: solid('#ffffff'), wall: solid('#ffffff'), back: solid('#ffffff'), ceil: solid('#ffffff'), hemi: [0xffffff, 0xdddddd], sun: 0xffffff, shadow: 0.15, unlit: true },
+  dark: { floor: solid('#000000'), wall: solid('#000000'), back: solid('#000000'), ceil: solid('#000000'), hemi: [0xffffff, 0x333344], sun: 0xffffff, shadow: 0.0, unlit: true },
 };
 const texCache = {};
 function styleTex(style, key) { const k = style + ':' + key; if (!texCache[k]) texCache[k] = STYLES[style][key](); return texCache[k]; }
 
 // ---------- 部屋の構築 ----------
 let depth = 0.1, Hr = 0.15;
+let blobShadow = null;
 function buildRoom() {
   if (roomGroup) { world.remove(roomGroup); roomGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   if (frameMesh) { scene.remove(frameMesh); frameMesh.geometry.dispose(); }
   depth = Wi * S.depth; Hr = Hi * 1.15;
-  const st = STYLES[S.roomStyle];
-  const mat = key => new THREE.MeshStandardMaterial({ map: styleTex(S.roomStyle, key), roughness: 0.9, metalness: 0, clippingPlanes: [glassClip] });
+  const st = STYLES[S.roomStyle] || STYLES.wood;
+  const mat = key => st.unlit
+    ? new THREE.MeshBasicMaterial({ map: styleTex(S.roomStyle, key), clippingPlanes: [glassClip] })
+    : new THREE.MeshStandardMaterial({ map: styleTex(S.roomStyle, key), roughness: 0.9, metalness: 0, clippingPlanes: [glassClip] });
   roomGroup = new THREE.Group();
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('floor')); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, -depth / 2);
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('ceil')); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, Hr, -depth / 2);
@@ -285,11 +303,10 @@ function buildRoom() {
   const left = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); left.rotation.y = Math.PI / 2; left.position.set(-Wi / 2, Hr / 2, -depth / 2);
   const right = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); right.rotation.y = -Math.PI / 2; right.position.set(Wi / 2, Hr / 2, -depth / 2);
   roomGroup.add(floor, ceil, back, left, right);
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.name = 'blobShadow'; roomGroup.add(shadow);
+  blobShadow = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: st.shadow, depthWrite: false }));
+  blobShadow.rotation.x = -Math.PI / 2; blobShadow.visible = st.shadow > 0; roomGroup.add(blobShadow);
   world.add(roomGroup);
 
-  // 黒枠（画面平面 z=0、開口に穴）
   const shape = new THREE.Shape(); shape.moveTo(-W / 2, -H / 2); shape.lineTo(W / 2, -H / 2); shape.lineTo(W / 2, H / 2); shape.lineTo(-W / 2, H / 2); shape.closePath();
   const hole = new THREE.Path(); hole.moveTo(-Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, -Hi / 2); hole.lineTo(Wi / 2, Hi / 2); hole.lineTo(-Wi / 2, Hi / 2); hole.closePath();
   shape.holes.push(hole);
@@ -305,14 +322,13 @@ const clockCanvas = document.createElement('canvas'); clockCanvas.width = 1024; 
 const clockCtx = clockCanvas.getContext('2d');
 const clockTex = new THREE.CanvasTexture(clockCanvas); clockTex.colorSpace = THREE.SRGBColorSpace; clockTex.anisotropy = 4;
 const clockMat = new THREE.MeshBasicMaterial({ map: clockTex, transparent: true, depthWrite: false });
-// 空中に浮かせる版
 const clockMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 1), clockMat); clockMesh.renderOrder = 2; world.add(clockMesh);
-// アバターが持つボード版（板 + 時計面）
-const board = new THREE.Group(); world.add(board);
+// アバターが持つボード（アバターの子にして、手の位置に合わせる。単位はアバターの実寸 m）
+const board = new THREE.Group();
 const boardBack = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.8, side: THREE.DoubleSide }));
 const boardEdge = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8, side: THREE.DoubleSide }));
 const boardFace = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), clockMat); boardFace.renderOrder = 2;
-boardEdge.position.z = 0.0005; boardFace.position.z = 0.0012;
+boardEdge.position.z = 0.0015; boardFace.position.z = 0.003;
 board.add(boardBack, boardEdge, boardFace);
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -329,8 +345,8 @@ function drawClock(now, force) {
   if (S.clockStyle === 'digital') {
     c.fillStyle = onBoard ? '#15181f' : 'rgba(10,12,18,.85)'; roundRect(c, 20, 60, w - 40, h - 120, 40); c.fill();
     c.fillStyle = '#e8f6ff'; c.font = 'bold 230px "Roboto Mono", "SF Mono", Menlo, monospace';
-    c.fillText(`${hh}:${mm}`, w / 2 - 70, h / 2 - (S.showDate ? 30 : 0));
-    c.font = '90px "Roboto Mono", Menlo, monospace'; c.fillStyle = '#7fc8ff'; c.fillText(ss, w / 2 + 390, h / 2 + 10 - (S.showDate ? 30 : 0));
+    c.fillText(`${hh}:${mm}`, w / 2 - 90, h / 2 - (S.showDate ? 30 : 0));
+    c.font = '90px "Roboto Mono", Menlo, monospace'; c.fillStyle = '#7fc8ff'; c.fillText(ss, w / 2 + 360, h / 2 + 10 - (S.showDate ? 30 : 0));
     if (S.showDate) { c.font = '58px sans-serif'; c.fillStyle = '#aab'; c.fillText(dateStr, w / 2, h / 2 + 150); }
   } else if (S.clockStyle === 'neon') {
     if (onBoard) { c.fillStyle = '#0b0b14'; roundRect(c, 20, 20, w - 40, h - 40, 40); c.fill(); }
@@ -342,7 +358,7 @@ function drawClock(now, force) {
   } else if (S.clockStyle === 'minimal') {
     c.fillStyle = onBoard ? '#222' : '#fff'; c.font = '200 240px "Helvetica Neue", Arial, sans-serif'; c.fillText(`${hh}:${mm}`, w / 2, h / 2 - (S.showDate ? 30 : 0));
     if (S.showDate) { c.font = '300 56px sans-serif'; c.fillStyle = onBoard ? '#555' : '#ccc'; c.fillText(dateStr, w / 2, h / 2 + 150); }
-  } else { // analog
+  } else {
     const r = h / 2 - 20, cx = w / 2, cy = h / 2;
     c.fillStyle = '#f4f1ea'; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
     c.strokeStyle = '#222'; c.lineWidth = 10; c.stroke();
@@ -359,25 +375,30 @@ function drawClock(now, force) {
 }
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
-// ---------- アバター ----------
+// ---------- アバター読込 ----------
 const loader = new GLTFLoader();
 loader.register(p => new VRMLoaderPlugin(p));
 let vrm = null, avatarRoot = null, avatarNativeHeight = 1.6;
 const lookTarget = new THREE.Object3D(); scene.add(lookTarget);
 
-// .glb が直接取れない配置（拡張子制限のあるホスト）向けに、同内容を base64 で包んだ .json も試す
 async function fetchModelBuffer(url) {
-  const r = await fetch(url);
-  if (r.ok) return await r.arrayBuffer();
-  const r2 = await fetch(url.replace(/\.(glb|vrm)$/i, '.json'));
-  if (!r2.ok) throw new Error(`HTTP ${r.status} / ${r2.status}`);
-  const j = await r2.json();
-  const bin = atob(j.b64); const u8 = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return u8.buffer;
+  // models/xxx.glb → 直下の xxx.glb → 同名 .json（base64包み）の順に探す
+  const base = url.split('/').pop();
+  const cands = [url, base, url.replace(/\.(glb|vrm)$/i, '.json'), base.replace(/\.(glb|vrm)$/i, '.json')];
+  let last = '';
+  for (const u of cands) {
+    let r; try { r = await fetch(u); } catch (e) { last = String(e); continue; }
+    if (!r.ok) { last = `HTTP ${r.status}`; continue; }
+    if (/\.json$/i.test(u)) {
+      const j = await r.json();
+      const bin = atob(j.b64); const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8.buffer;
+    }
+    return await r.arrayBuffer();
+  }
+  throw new Error(last || 'not found');
 }
-
-// テクスチャ縮小（4K/2Kテクスチャ×多数はスマホGPUに載らないため）
 function downscaleTextures(root, limit) {
   if (!limit) return 0;
   const seen = new Set(); let n = 0;
@@ -398,17 +419,38 @@ function downscaleTextures(root, limit) {
   return n;
 }
 
+// ボーン基準情報（アバターのローカル座標・実寸 m）
+const rig = { ok: false, left: null, right: null, headY: 0.6, shoulderY: 0.3, hipsY: 0.0 };
+function b(n) { return vrm?.humanoid?.getNormalizedBoneNode(n) || null; }
+function measureRig() {
+  // 静止ポーズ（全ボーン単位回転）で各関節の位置と腕の長さを測る
+  rig.ok = false;
+  const root = avatarRoot;
+  root.updateMatrixWorld(true);
+  const lp = n => { const o = b(n); if (!o) return null; const v = o.getWorldPosition(new THREE.Vector3()); return root.worldToLocal(v); };
+  for (const side of ['left', 'right']) {
+    const S0 = lp(side + 'UpperArm'), E0 = lp(side + 'LowerArm'), H0 = lp(side + 'Hand');
+    if (!S0 || !E0 || !H0) { rig[side] = null; continue; }
+    rig[side] = { S: S0, L1: S0.distanceTo(E0), L2: E0.distanceTo(H0) };
+  }
+  const head = lp('head'), hips = lp('hips');
+  rig.headY = head ? head.y : 0.6; rig.hipsY = hips ? hips.y : 0.9;
+  rig.shoulderY = rig.left ? rig.left.S.y : 0.3;
+  rig.ok = !!(rig.left && rig.right);
+}
+
 async function loadModelBuffer(buf, label) {
   setHud(`モデル読込中… ${label}`);
   const gltf = await new Promise((res, rej) => loader.parse(buf, '', res, rej));
   if (avatarRoot) { world.remove(avatarRoot); avatarRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  if (board.parent) board.parent.remove(board);
   vrm = gltf.userData.vrm || null;
   const nTex = downscaleTextures(gltf.scene, parseInt(S.texLimit) || 0);
   if (vrm) {
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
     VRMUtils.combineSkeletons(gltf.scene);
     VRMUtils.combineMorphs(vrm);
-    VRMUtils.rotateVRM0(vrm); // VRM0.x は向きが逆なので揃える（VRM1 には影響なし）
+    VRMUtils.rotateVRM0(vrm);
     avatarRoot = vrm.scene;
     vrm.scene.traverse(o => { o.frustumCulled = false; });
     if (vrm.lookAt) { vrm.lookAt.target = lookTarget; vrm.lookAt.autoUpdate = true; }
@@ -416,19 +458,21 @@ async function loadModelBuffer(buf, label) {
     const credit = meta.metaVersion === '1'
       ? `${meta.name || ''} / ${(meta.authors || []).join(', ')} / ${meta.licenseUrl || ''}`
       : `${meta.title || ''} / ${meta.author || ''} / ${meta.licenseName || ''}`;
-    if (label !== 'Seed-san') $('credit').textContent = `読込モデル: ${credit}`;
-    else $('credit').textContent = '同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0';
-    initPose();
+    $('credit').textContent = label === 'Seed-san' ? '同梱アバター: Seed-san / © VirtualCast, Inc. / VRM Public License 1.0' : `読込モデル: ${credit}`;
+    resetPose();
+    measureRig();
   } else {
-    avatarRoot = gltf.scene;
+    avatarRoot = gltf.scene; rig.ok = false;
   }
   avatarRoot.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(avatarRoot);
+  const box = new THREE.Box3().setFromObject(avatarRoot);   // ボードを付ける前に測る
   avatarNativeHeight = Math.max(0.01, box.max.y - box.min.y);
   avatarRoot.userData.minY = box.min.y;
+  if (vrm) avatarRoot.add(board);
   world.add(avatarRoot);
   layoutObjects();
-  setHud(nTex ? `テクスチャ ${nTex} 枚を ${S.texLimit}px に縮小` : '');
+  walker.reset();
+  setHud(nTex ? `テクスチャ ${nTex} 枚を ${S.texLimit}px に縮小` : '', false, 3000);
 }
 async function loadModel(url, label) {
   try { await loadModelBuffer(await fetchModelBuffer(url), label); }
@@ -449,111 +493,285 @@ async function loadStartupModel() {
   await loadModel('models/seed-san.glb', 'Seed-san');
 }
 
+let avatarScale = 1;
 function layoutObjects() {
   const cw = Wi * S.clockSize, ch = cw / 2;
   clockMesh.scale.set(cw / 2, ch, 1);
   clockMesh.position.set(S.clockX * Wi, S.clockY * Hr, S.clockZ * depth);
   clockMesh.visible = S.clockPlace === 'float';
-  board.visible = S.clockPlace === 'board' && !!vrm && S.showAvatar;
+  board.visible = S.clockPlace === 'board' && !!vrm && rig.ok && S.showAvatar;
   if (avatarRoot) {
     const target = Hr * S.avatarH;
-    const sc = target / avatarNativeHeight;
-    G = 1 / sc;
-    avatarRoot.scale.setScalar(sc);
-    avatarRoot.position.set(S.avatarX * Wi, -avatarRoot.userData.minY * sc, S.avatarZ * depth);
+    avatarScale = target / avatarNativeHeight;
+    G = 1 / avatarScale;
+    avatarRoot.scale.setScalar(avatarScale);
     avatarRoot.visible = S.showAvatar;
-    const sh = roomGroup?.getObjectByName('blobShadow');
-    if (sh) { sh.visible = S.showAvatar; sh.position.set(avatarRoot.position.x, 0.0003, avatarRoot.position.z); sh.scale.setScalar(target * 0.14); }
-    // ボード寸法（身長比。placeBoard で両手の間隔にも合わせる）
-    const bw = target * S.boardSize * 0.75, bh = bw / 2;
-    boardBack.scale.set(bw, bh, 1); boardEdge.scale.set(bw * 0.96, bh * 0.92, 1); boardFace.scale.set(bw * 0.94, bh * 0.88, 1);
+    walker.home.set(S.avatarX * Wi, S.avatarZ * depth);
+    // ボード寸法（アバター実寸 m）
+    const bw = avatarNativeHeight * S.boardSize, bh = bw / 2;
+    boardBack.scale.set(bw, bh, 1); boardEdge.scale.set(bw * 0.965, bh * 0.93, 1); boardFace.scale.set(bw * 0.84, bh * 0.86, 1);
     board.userData.bw = bw; board.userData.bh = bh;
   } else { G = 1; }
   pivot.scale.setScalar(G); pivot.position.set(0, -Hi / 2 * G, 0);
   if (frameMesh) frameMesh.scale.setScalar(G);
 }
 
-// ---------- ポーズ（手続き） ----------
-// 正規化ボーンは静止時に全て単位回転・ワールド軸揃えなので、「腕の向きベクトル」から回転を直接作れる。
-const _X = new THREE.Vector3(1, 0, 0), _NX = new THREE.Vector3(-1, 0, 0);
-const qTmp = new THREE.Quaternion(), qTmp2 = new THREE.Quaternion(), vTmp = new THREE.Vector3();
-function armQuats(side, dUpper, dLower) {
-  // side: 'left'(+X) / 'right'(-X)。戻り値: [上腕の回転, 前腕の回転(親基準)]
-  const axis = side === 'left' ? _X : _NX;
-  const q1 = new THREE.Quaternion().setFromUnitVectors(axis, vTmp.copy(dUpper).normalize());
-  const q2w = new THREE.Quaternion().setFromUnitVectors(axis, vTmp.copy(dLower).normalize());
-  const q2 = q1.clone().invert().multiply(q2w);
-  return [q1, q2];
-}
-// 「ボードを持つ」ポーズ: 上腕は下やや前、前腕は内側・前・やや上
-const HOLD = {
-  left: armQuats('left', new THREE.Vector3(0.22, -0.95, 0.22), new THREE.Vector3(-0.22, 0.12, 0.95)),
-  right: armQuats('right', new THREE.Vector3(-0.22, -0.95, 0.22), new THREE.Vector3(0.22, 0.12, 0.95)),
-};
-// 「手を振る」ポーズ（右腕）: 上腕は横上、前腕は上。前腕は時間で左右に振る
-function waveQuats(t) {
-  const sw = Math.sin(t * 9) * 0.55;
-  return armQuats('right', new THREE.Vector3(-0.50, 0.82, 0.28), new THREE.Vector3(0.05 + sw, 0.92, 0.30));
-}
-const handTilt = { left: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.6, 0.4)), right: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.6, -0.4)) };
-let wave = { active: false, t0: 0, dur: 2.6, blend: 0 };
-function initPose() {
-  const b = n => vrm.humanoid?.getNormalizedBoneNode(n);
-  for (const n of ['leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'head', 'neck', 'spine']) { const o = b(n); if (o) { o.rotation.set(0, 0, 0); o.quaternion.identity(); } }
-  for (const n of ['leftUpperLeg', 'rightUpperLeg']) { const o = b(n); if (o) o.rotation.set(0, 0, 0); }
-}
-function startWave() { if (!vrm) return; wave.active = true; wave.t0 = performance.now() / 1000; }
-function applyPose(t, dt) {
-  const b = n => vrm.humanoid?.getNormalizedBoneNode(n);
-  const lu = b('leftUpperArm'), ll = b('leftLowerArm'), ru = b('rightUpperArm'), rl = b('rightLowerArm'), lh = b('leftHand'), rh = b('rightHand');
-  const k = 1 - Math.exp(-dt * 10);
-  if (lu) lu.quaternion.slerp(HOLD.left[0], k); if (ll) ll.quaternion.slerp(HOLD.left[1], k); if (lh) lh.quaternion.slerp(handTilt.left, k);
-  // 右腕: 手振りとのブレンド
-  // ブレンド係数は実時間ベース（フレームレートが低くても同じ長さで振る）
-  const el = wave.active ? t - wave.t0 : 99;
-  if (wave.active && el > wave.dur + 0.5) wave.active = false;
-  const ss = (a, b, x) => { const u = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
-  wave.blend = wave.active ? ss(0, 0.35, el) * (1 - ss(wave.dur - 0.45, wave.dur, el)) : 0;
-  const [wq1, wq2] = waveQuats(t);
-  qTmp.copy(HOLD.right[0]).slerp(wq1, wave.blend); qTmp2.copy(HOLD.right[1]).slerp(wq2, wave.blend);
-  if (ru) ru.quaternion.slerp(qTmp, k); if (rl) rl.quaternion.slerp(qTmp2, k);
-  if (rh) { const open = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.sin(t * 11) * 0.25)); qTmp.copy(handTilt.right).slerp(open, wave.blend); rh.quaternion.slerp(qTmp, k); }
-  // 表情
-  if (vrm.expressionManager) {
-    vrm.expressionManager.setValue('happy', Math.min(1, wave.blend) * 0.8);
+// ---------- ポーズ：2ボーンIK（アバターのローカル座標、実寸 m） ----------
+// 正規化ボーンは静止時に全て単位回転・ワールド軸揃え。腕の軸は左 +X / 右 -X、手のひらは -Y 向き。
+const V = () => new THREE.Vector3();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qt = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _qr = new THREE.Quaternion();
+const _eul = new THREE.Euler();
+const _v1 = V(), _v2 = V(), _v3 = V(), _v4 = V();
+// axis をワールド方向 dir に向け、さらに ref（ローカル方向）が refTarget に最も近づくよう軸周りにひねる
+function aimQuat(out, axis, dir, ref, refTarget) {
+  _v1.copy(dir).normalize();
+  out.setFromUnitVectors(axis, _v1);
+  if (ref && refTarget) {
+    _v2.copy(ref).applyQuaternion(out);                      // 現在の ref 方向
+    _v3.copy(refTarget).addScaledVector(_v1, -refTarget.dot(_v1)); // 目標を軸に直交する面へ射影
+    if (_v3.lengthSq() > 1e-6) {
+      _v3.normalize();
+      const ang = Math.atan2(_v1.dot(_v4.crossVectors(_v2, _v3)), _v2.dot(_v3));
+      _qt.setFromAxisAngle(_v1, ang);
+      out.premultiply(_qt);
+    }
   }
+  return out;
+}
+// 肩 S から手先 T へ。pole は肘を出す方向のヒント。戻り値: 上腕方向 dU, 前腕方向 dL
+function solveTwoBone(S0, T, L1, L2, pole, dU, dL) {
+  _v1.subVectors(T, S0);
+  let d = _v1.length(); if (d < 1e-4) { _v1.set(0, -1, 0); d = 1e-4; }
+  const dmax = (L1 + L2) * 0.995, dmin = Math.abs(L1 - L2) + 0.005;
+  d = Math.min(dmax, Math.max(dmin, d));
+  _v1.normalize();                                           // u: 肩→手
+  _v2.copy(pole).addScaledVector(_v1, -pole.dot(_v1));      // p: 肘ヒント（u に直交）
+  if (_v2.lengthSq() < 1e-6) _v2.set(0, -1, 0).addScaledVector(_v1, -_v1.y);
+  _v2.normalize();
+  const cosA = Math.min(1, Math.max(-1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+  const sinA = Math.sqrt(1 - cosA * cosA);
+  dU.copy(_v1).multiplyScalar(cosA).addScaledVector(_v2, sinA).normalize(); // 上腕方向
+  _v3.copy(S0).addScaledVector(dU, L1);                      // 肘位置
+  dL.subVectors(T, _v3).normalize();                          // 前腕方向
+}
+const AXIS = { left: new THREE.Vector3(1, 0, 0), right: new THREE.Vector3(-1, 0, 0) };
+const LOCAL_Z = new THREE.Vector3(0, 0, 1), LOCAL_NY = new THREE.Vector3(0, -1, 0);
+const _dU = V(), _dL = V(), _S = V();
+// 片腕を目標へ。T: 手先目標、pole: 肘ヒント、palm: 手のひらを向けたい方向、wrist: 手首の追加回転（前腕軸まわり/曲げ）
+function poseArm(side, T, pole, palm, wristY = 0, wristZ = 0) {
+  const r = rig[side]; if (!r) return;
+  const up = b(side + 'UpperArm'), lo = b(side + 'LowerArm'), ha = b(side + 'Hand');
+  if (!up || !lo || !ha) return;
+  // 現在の肩位置と親フレーム（体のひねり・前かがみを含む）をアバターローカルで取得
+  avatarRoot.getWorldQuaternion(_qr).invert();
+  up.getWorldPosition(_S); avatarRoot.worldToLocal(_S);
+  up.parent.getWorldQuaternion(_qp).premultiply(_qr);
+  solveTwoBone(_S, T, r.L1, r.L2, pole, _dU, _dL);
+  aimQuat(_q1, AXIS[side], _dU, LOCAL_Z, _dL);              // 上腕: ローカル+Z（肘の曲がる側）を前腕方向へ
+  aimQuat(_q2, AXIS[side], _dL, LOCAL_NY, palm);            // 前腕: 手のひら(-Y)を palm 方向へ
+  up.quaternion.copy(_qp).invert().multiply(_q1);
+  lo.quaternion.copy(_q1).invert().multiply(_q2);
+  // 手首: 前腕ローカルで Y（手のひら法線まわり=左右振り）と Z（曲げ）
+  ha.quaternion.setFromEuler(_eul.set(0, wristY, wristZ));
+}
+// 指を軽く曲げる（AnimSchool の指針: 均一にしない。人差し指は浅く、小指は深く）
+const FINGERS = ['Index', 'Middle', 'Ring', 'Little'];
+const CURL = { Index: 0.7, Middle: 1.0, Ring: 1.15, Little: 1.3 };
+function curlFingers(side, amount) {
+  const sgn = side === 'left' ? -1 : 1;  // 手のひら(-Y)側へ曲げる
+  for (const f of FINGERS) {
+    const k = CURL[f] * amount;
+    const p = b(`${side}${f}Proximal`), i = b(`${side}${f}Intermediate`), d = b(`${side}${f}Distal`);
+    if (p) p.rotation.set(0, 0, sgn * 0.30 * k);
+    if (i) i.rotation.set(0, 0, sgn * 0.45 * k);
+    if (d) d.rotation.set(0, 0, sgn * 0.20 * k);
+  }
+  const tp = b(`${side}ThumbProximal`) || b(`${side}ThumbMetacarpal`);
+  if (tp) tp.rotation.set(0, sgn * -0.15 * amount, 0);
+}
+function resetPose() {
+  const names = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head', 'leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg', 'leftFoot', 'rightFoot'];
+  for (const n of names) { const o = b(n); if (o) o.quaternion.identity(); }
+  for (const side of ['left', 'right']) for (const f of [...FINGERS, 'Thumb']) for (const j of ['Metacarpal', 'Proximal', 'Intermediate', 'Distal']) { const o = b(`${side}${f}${j}`); if (o) o.quaternion.identity(); }
 }
 
-// ボードを手の位置に追従させる
-const pL = new THREE.Vector3(), pR = new THREE.Vector3(), pC = new THREE.Vector3();
-function placeBoard() {
-  if (!board.visible || !vrm) return;
-  const lh = vrm.humanoid?.getNormalizedBoneNode('leftHand'), rh = vrm.humanoid?.getNormalizedBoneNode('rightHand');
-  if (!lh || !rh) return;
-  lh.getWorldPosition(pL); rh.getWorldPosition(pR);
-  world.worldToLocal(pL); world.worldToLocal(pR);
-  const bw = board.userData.bw || 0.05, bh = board.userData.bh || 0.025;
-  const sc = avatarRoot.scale.x;
-  // 両手で持つ時は両手の中点、振っている時は左手基準（板の左下を左手が持っている想定）
-  pC.copy(pL).add(pR).multiplyScalar(0.5);
-  const oneHand = new THREE.Vector3(pL.x - bw * 0.46, pL.y, pL.z); // 左手(+X側)が板の右端を持つ
-  pC.lerp(oneHand, wave.blend);
-  pC.y += bh * 0.45; pC.z += sc * 0.03;
-  board.position.lerp(pC, 0.5);
-  const tiltZ = 0.18 * wave.blend; // 片手持ちで反対側が少し下がる
-  qTmp.setFromEuler(new THREE.Euler(-0.12, 0, tiltZ));
-  board.quaternion.slerp(qTmp, 0.3);
+// ---------- 手を振る（実時間ベース） ----------
+// 参考にした指針: 身体全体を連動させ、予備動作→本動作→戻りを入れる（CGWORLD）。手首・指は固くしない（AnimSchool）。
+const wave = { active: false, t0: 0, dur: 2.4, blend: 0, phase: 0 };
+function startWave() { if (!vrm || !rig.ok) return; if (wave.active) return; wave.active = true; wave.t0 = performance.now() / 1000; }
+const ss = (a, c, x) => { const u = THREE.MathUtils.clamp((x - a) / (c - a), 0, 1); return u * u * (3 - 2 * u); };
+
+// ---------- 歩いて寄ってくる ----------
+const walker = {
+  home: new THREE.Vector2(0, -0.05), pos: new THREE.Vector2(0, -0.05), target: new THREE.Vector2(0, -0.05),
+  phase: 0, speed: 0, yaw: 0, offsideSince: 0, centeredSince: 0, approaching: false,
+  reset() { this.pos.copy(this.home); this.target.copy(this.home); this.phase = 0; this.speed = 0; this.yaw = 0; this.approaching = false; },
+};
+const _p = V(), _pa = V(), _pb = V(), Y_AXIS = new THREE.Vector3(0, 1, 0);
+function updateWalker(dt) {
+  if (!avatarRoot) return;
+  const halfW = avatarNativeHeight * 0.22 * avatarScale; // 肩幅＋腕の余裕（部屋単位）
+  const limX = Wi / 2 - halfW * 1.05;
+  const now = performance.now();
+  if (S.approach && rig.ok) {
+    // 胸の高さの点と、その左右端を画面に投影し、開口（NDC ±Wi/W）から外れていれば寄せる
+    const cy = rig.hipsY * 1.3 * avatarScale;
+    _p.set(walker.pos.x, cy, walker.pos.y); world.localToWorld(_p);
+    _pa.set(walker.pos.x - halfW, cy, walker.pos.y); world.localToWorld(_pa);
+    _pb.set(walker.pos.x + halfW, cy, walker.pos.y); world.localToWorld(_pb);
+    _p.project(camera); _pa.project(camera); _pb.project(camera);
+    const lim = (Wi / W) * 0.93;
+    const a = (_pb.x - _pa.x) / (2 * halfW); // NDC/部屋x
+    let dx = 0;
+    if (_pa.x < -lim) dx = (-lim - _pa.x) / a; else if (_pb.x > lim) dx = (lim - _pb.x) / a;
+    if (Math.abs(dx) > 0.004 * Wi) {
+      walker.offsideSince = walker.offsideSince || now; walker.centeredSince = 0;
+      const tx = THREE.MathUtils.clamp(walker.pos.x + dx, -limX, limX);
+      walker.target.set(tx, Math.min(walker.home.y * 0.55, -halfW * 0.6)); // こちらへ寄る（ガラス寄り）
+      walker.approaching = true;
+    } else {
+      walker.offsideSince = 0; walker.centeredSince = walker.centeredSince || now;
+      if (walker.approaching && now - walker.centeredSince > 4000) { walker.target.copy(walker.home); walker.approaching = false; }
+      if (!walker.approaching) walker.target.copy(walker.home);
+    }
+  } else { walker.target.copy(walker.home); walker.approaching = false; }
+  // 移動（最大 0.6 m/s 実寸）
+  const vmax = 0.6 * avatarScale, acc = 2.5;
+  const d = _v1.set(walker.target.x - walker.pos.x, 0, walker.target.y - walker.pos.y);
+  const dist = d.length();
+  const want = Math.min(vmax, dist * 3);
+  walker.speed += (want - walker.speed) * Math.min(1, dt * acc);
+  if (dist > 1e-5) {
+    const step = Math.min(dist, walker.speed * dt);
+    d.multiplyScalar(step / dist);
+    walker.pos.x += d.x; walker.pos.y += d.z;
+    walker.phase += (step / avatarScale) / 0.55 * Math.PI * 2;     // 歩幅 0.55 m で 1 周期
+    const yawT = Math.atan2(d.x, d.z) ; // 進行方向
+    walker.yaw += (THREE.MathUtils.clamp(yawT, -0.6, 0.6) * Math.min(1, walker.speed / vmax * 1.5) - walker.yaw) * Math.min(1, dt * 4);
+  } else {
+    walker.speed = 0; walker.yaw += (0 - walker.yaw) * Math.min(1, dt * 4);
+  }
+  const moving = Math.min(1, walker.speed / (vmax * 0.3));
+  // 脚の振り（進行方向に沿って）、止まったら戻す
+  const lu = b('leftUpperLeg'), ru = b('rightUpperLeg'), ll = b('leftLowerLeg'), rl = b('rightLowerLeg');
+  if (lu && ru) {
+    const s = Math.sin(walker.phase) * 0.45 * moving;
+    _v2.set(d.x, 0, d.z); if (_v2.lengthSq() > 1e-8) _v2.normalize(); else _v2.set(0, 0, 1);
+    // アバターローカルの進行方向
+    _v2.applyAxisAngle(Y_AXIS, -walker.yaw);
+    lu.rotation.set(-s * _v2.z, 0, s * _v2.x);
+    ru.rotation.set(s * _v2.z, 0, -s * _v2.x);
+    if (ll) ll.rotation.set(Math.max(0, -Math.sin(walker.phase)) * 0.6 * moving, 0, 0);
+    if (rl) rl.rotation.set(Math.max(0, Math.sin(walker.phase)) * 0.6 * moving, 0, 0);
+    if (!moving) { lu.rotation.set(0, 0, 0); ru.rotation.set(0, 0, 0); if (ll) ll.rotation.set(0, 0, 0); if (rl) rl.rotation.set(0, 0, 0); }
+  }
+  const bob = Math.abs(Math.sin(walker.phase)) * 0.018 * moving * avatarScale;
+  avatarRoot.position.set(walker.pos.x, -avatarRoot.userData.minY * avatarScale + bob, walker.pos.y);
+  avatarRoot.rotation.set(0, walker.yaw, 0);
+  if (blobShadow) { blobShadow.position.set(walker.pos.x, 0.0003, walker.pos.y); blobShadow.scale.setScalar(avatarNativeHeight * avatarScale * 0.14); blobShadow.visible = S.showAvatar && blobShadow.material.opacity > 0; }
+}
+
+// ---------- 毎フレームのアバター更新 ----------
+const TL = V(), TR = V(), TW = V(), WPOS = V(), POLE_T = V(), PALM_T = V();
+const POLE_L = new THREE.Vector3(1, -1, -0.2), POLE_R = new THREE.Vector3(-1, -1, -0.2), POLE_WAVE = new THREE.Vector3(-1, -0.3, 0.3);
+const PALM_L = new THREE.Vector3(-1, 0, 0), PALM_R = new THREE.Vector3(1, 0, 0), PALM_WAVE = V();
+const headPos = V(), tmpV = V();
+let blinkT = 0, nextBlink = 2, idleT = Math.random() * 10;
+function updateAvatar(dt, t) {
+  if (!vrm) return;
+  const spine = b('spine'), chest = b('chest'), head = b('head'), neck = b('neck');
+  // --- 手振りの時間カーブ ---
+  const el = wave.active ? t - wave.t0 : 99;
+  if (wave.active && el > wave.dur + 0.6) wave.active = false;
+  wave.blend = wave.active ? ss(0, 0.45, el) * (1 - ss(wave.dur - 0.5, wave.dur + 0.1, el)) : 0;
+  const wb = wave.blend;
+  const smile = wave.active ? ss(0.1, 0.5, el) * (1 - ss(wave.dur + 0.1, wave.dur + 0.6, el)) : 0;
+
+  // --- 体：呼吸・重心の揺れ・手振り時の傾き（部位だけ動かさず体全体を連動させる） ---
+  idleT += dt;
+  const breath = Math.sin(t * 1.5) * 0.012;
+  const sway = Math.sin(idleT * 0.35) * 0.02;
+  if (spine) spine.rotation.set(breath, 0, sway + 0.05 * wb);
+  if (chest) chest.rotation.set(breath * 0.5, 0.0, 0.02 * wb);
+  const hips = b('hips'); if (hips) hips.rotation.set(0, 0, -sway * 0.6);
+
+  // --- 頭：視線の方向へ（首 40% / 頭 60%）＋手振り時に少し傾ける ---
+  if (head) {
+    let yaw = 0, pitch = 0;
+    if (S.lookAtMe) {
+      avatarRoot.updateMatrixWorld(true);
+      head.getWorldPosition(headPos); avatarRoot.worldToLocal(headPos);
+      tmpV.copy(eye).multiplyScalar(G); avatarRoot.worldToLocal(tmpV).sub(headPos); // 目の位置をアバターローカル（実寸）へ
+      yaw = THREE.MathUtils.clamp(Math.atan2(tmpV.x, tmpV.z), -0.7, 0.7);
+      pitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.5, 0.5);
+    }
+    const k = 1 - Math.exp(-dt * 6);
+    const roll = 0.10 * wb + sway * 0.5;
+    head.rotation.y += (yaw * 0.6 - head.rotation.y) * k; head.rotation.x += (-pitch * 0.6 - head.rotation.x) * k; head.rotation.z += (roll - head.rotation.z) * k;
+    if (neck) { neck.rotation.y += (yaw * 0.4 - neck.rotation.y) * k; neck.rotation.x += (-pitch * 0.4 - neck.rotation.x) * k; neck.rotation.z += (roll * 0.4 - neck.rotation.z) * k; }
+  }
+
+  // --- 腕：ボードを両側から持つ（手はボードの外側＝貫通しない） ---
+  if (rig.ok) {
+    avatarRoot.updateMatrixWorld(true);
+    const bw = board.userData.bw || 0.3, bh = board.userData.bh || 0.15;
+    const yHold = rig.shoulderY + S.boardY * avatarNativeHeight / 1.6 * 1.0; // 胸〜腹の高さ
+    const zHold = 0.26 * avatarNativeHeight / 1.6;
+    const grip = 0.02;
+    TL.set(bw / 2 + grip, yHold, zHold);
+    TR.set(-(bw / 2 + grip), yHold, zHold);
+    const holdFinger = 1.2;
+    poseArm('left', TL, POLE_L, PALM_L, 0, 0);
+    curlFingers('left', holdFinger);
+    if (wb > 0.001) {
+      // 右手: 肩の斜め上（頭の横）で、前腕を左右に小さく往復（約 2.5 Hz, ±約 17°）。手のひらはこちら向き
+      const S0 = rig.right.S;
+      const osc = Math.sin((el - 0.45) * Math.PI * 2 * 2.5) * ss(0.3, 0.6, el) * (1 - ss(wave.dur - 0.6, wave.dur - 0.2, el));
+      WPOS.set(S0.x - 0.20 + osc * 0.07, S0.y + 0.26 + Math.abs(osc) * 0.01, 0.12 + osc * 0.015);
+      // 上げ下げの途中で少し外へ膨らむ弧（直線的に動かさない）
+      const arc = Math.sin(wb * Math.PI) * 0.06;
+      TW.copy(TR).lerp(WPOS, wb); TW.x -= arc; TW.z += arc * 0.5;
+      PALM_WAVE.set(-0.25, 0.1, 1).normalize();
+      PALM_T.copy(PALM_R).lerp(PALM_WAVE, wb);
+      POLE_T.copy(POLE_R).lerp(POLE_WAVE, wb);
+      poseArm('right', TW, POLE_T, PALM_T, osc * 0.35 * wb, -0.15 * wb);
+      curlFingers('right', holdFinger * (1 - wb) + 0.35 * wb);
+    } else {
+      poseArm('right', TR, POLE_R, PALM_R, 0, 0);
+      curlFingers('right', holdFinger);
+    }
+    // ボード：両手持ちの中心。片手になると持っている側（左手=+X）を支点に反対側が少し下がる
+    if (board.visible) {
+      const r = bw / 2 + grip, th = 0.22 * wb;
+      board.position.set(TL.x - r * Math.cos(th), yHold - r * Math.sin(th), zHold);
+      board.rotation.set(-0.10, 0, th);
+    }
+  }
+
+  // --- 表情：待機は薄い微笑み、手振り中は happy 0.5 まで（閉眼にならない範囲） ---
+  const em = vrm.expressionManager;
+  if (em) {
+    const seen = S.mode === 'face' && performance.now() - faceSeenAt < 1500;
+    const base = seen ? 0.35 : 0.2;
+    em.setValue('relaxed', base + 0.1 * smile);
+    em.setValue('happy', 0.5 * smile);
+    blinkT += dt;
+    let v = 0;
+    if (blinkT > nextBlink) { const p = (blinkT - nextBlink) / 0.16; v = p < 1 ? Math.sin(p * Math.PI) : 0; if (p >= 1) { blinkT = 0; nextBlink = 2 + Math.random() * 4; } }
+    em.setValue('blink', v * (1 - smile * 0.5));
+  }
+  vrm.update(dt);
 }
 
 // ---------- 視点（目の位置） [m, 画面座標] ----------
 const eye = new THREE.Vector3(0, 0, 0.55);
 const eyeRaw = new THREE.Vector3(0, 0, 0.55);
-let faceSeenAt = 0;
+let faceSeenAt = 0, lastZraw = 0.5;
+let faceBox = null; // 画像正規化座標 {x0,y0,x1,y1}
 
-// --- 顔追跡 + 手振り検出 ---
+// --- カメラ・顔追跡 ---
 let faceLM = null, handLM = null, video = $('video'), stream = null, faceFps = 0, lastVideoTime = -1, frameNo = 0;
 let handSeenAt = 0, lastWaveAt = 0;
-const wristHist = []; // {t, x}
 async function startFace() {
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('このブラウザ/環境ではカメラが使えません（https が必要）');
@@ -566,9 +784,9 @@ async function startFace() {
     const fopts = d => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: d }, runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false });
     try { faceLM = await FaceLandmarker.createFromOptions(vision, fopts('GPU')); }
     catch (e) { console.warn('GPU delegate failed, fallback CPU', e); faceLM = await FaceLandmarker.createFromOptions(vision, fopts('CPU')); }
-    if (S.waveDetect) {
+    if (S.waveDetect && S.useHandModel) {
       setHud('手検出モデル読込中…');
-      const hopts = d => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: d }, runningMode: 'VIDEO', numHands: 1 });
+      const hopts = d => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: d }, runningMode: 'VIDEO', numHands: 1, minHandDetectionConfidence: 0.4 });
       try { handLM = await HandLandmarker.createFromOptions(vision, hopts('GPU')); }
       catch (e) { console.warn('hand GPU failed', e); try { handLM = await HandLandmarker.createFromOptions(vision, hopts('CPU')); } catch (e2) { console.warn('hand CPU failed', e2); } }
     }
@@ -583,7 +801,62 @@ function stopFace() {
   if (faceLM) { try { faceLM.close(); } catch (e) {} faceLM = null; }
   if (handLM) { try { handLM.close(); } catch (e) {} handLM = null; }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; }
+  motion.prev = null; motion.hist.length = 0;
 }
+
+// --- 手振り検出（映像差分） ---
+const motion = { cv: document.createElement('canvas'), ctx: null, prev: null, hist: [], frac: 0, rev: 0, w: 96, h: 72 };
+motion.cv.width = motion.w; motion.cv.height = motion.h; motion.ctx = motion.cv.getContext('2d', { willReadFrequently: true });
+function updateMotion(now) {
+  const { w, h, ctx } = motion;
+  // 映像の縦横比に合わせる
+  const ar = video.videoWidth / video.videoHeight;
+  const hh = Math.round(w / ar); if (hh !== motion.h) { motion.h = hh; motion.cv.height = hh; motion.prev = null; }
+  ctx.drawImage(video, 0, 0, w, motion.h);
+  const img = ctx.getImageData(0, 0, w, motion.h).data;
+  const n = w * motion.h;
+  if (!motion.prev || motion.prev.length !== n) { motion.prev = new Uint8Array(n); for (let i = 0; i < n; i++) motion.prev[i] = (img[i * 4] * 3 + img[i * 4 + 1] * 6 + img[i * 4 + 2]) / 10; return; }
+  // 除外領域: 顔（±0.45幅）とその下の胴体
+  let ex0 = -1, ex1 = -1, ey0 = -1, fh = 0.2;
+  if (faceBox) { const fw = faceBox.x1 - faceBox.x0; fh = faceBox.y1 - faceBox.y0; ex0 = faceBox.x0 - 0.45 * fw; ex1 = faceBox.x1 + 0.45 * fw; ey0 = faceBox.y0 - 0.5 * fh; }
+  let cnt = 0, sx = 0, sy = 0;
+  const thr = 26;
+  for (let y = 0; y < motion.h; y++) {
+    const ny = y / motion.h;
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const lum = (img[i * 4] * 3 + img[i * 4 + 1] * 6 + img[i * 4 + 2]) / 10;
+      const d = Math.abs(lum - motion.prev[i]); motion.prev[i] = lum;
+      if (d < thr) continue;
+      const nx = x / w;
+      if (faceBox && nx > ex0 && nx < ex1 && ny > ey0) continue;   // 顔・胴体
+      cnt++; sx += nx; sy += ny;
+    }
+  }
+  motion.frac = cnt / n;
+  const sens = S.waveSens;
+  if (faceBox && motion.frac > 0.010 / sens) {
+    const cx = sx / cnt, cy = sy / cnt;
+    if (cy < faceBox.y1 + 1.6 * fh) motion.hist.push({ t: now, x: cx });   // 頭〜肩の高さ付近だけ
+  }
+  while (motion.hist.length && now - motion.hist[0].t > 1600) motion.hist.shift();
+  // 折り返し回数（振幅 ≥ 5% 幅）
+  let rev = 0;
+  if (motion.hist.length >= 4) {
+    let dirn = 0, ext = motion.hist[0].x;
+    const amp = 0.05 / sens;
+    for (let i = 1; i < motion.hist.length; i++) {
+      const d = motion.hist[i].x - ext;
+      if (Math.abs(d) < amp) continue;
+      const s = Math.sign(d);
+      if (dirn && s !== dirn) rev++;
+      dirn = s; ext = motion.hist[i].x;
+    }
+  }
+  motion.rev = rev;
+  if (rev >= 2 && now - lastWaveAt > 6000) { lastWaveAt = now; motion.hist.length = 0; startWave(); }
+}
+
 let fpsCount = 0, fpsT = performance.now();
 function updateFace() {
   if (!faceLM || video.readyState < 2 || video.currentTime === lastVideoTime) return;
@@ -594,42 +867,29 @@ function updateFace() {
   const lm = res.faceLandmarks?.[0];
   if (lm && lm.length >= 474) {
     const vw = video.videoWidth, vh = video.videoHeight;
-    const L = lm[468], R = lm[473];                        // 虹彩中心
+    let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+    for (let i = 0; i < lm.length; i += 4) { const p = lm[i]; if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+    faceBox = { x0, y0, x1, y1 };
+    const L = lm[468], R = lm[473];
     const ipdPx = Math.hypot((L.x - R.x) * vw, (L.y - R.y) * vh);
     if (ipdPx >= 2) {
-      const fpx = (vw / 2) / Math.tan(S.hfov * Math.PI / 360);  // 焦点距離[px]（画角は設定値＝仮定）
-      const Z = (S.ipd / 1000) * fpx / ipdPx;                   // 瞳孔間距離からの距離推定
+      const fpx = (vw / 2) / Math.tan(S.hfov * Math.PI / 360) * S.fScale;  // 焦点距離[px]（画角は仮定、fScale はキャリブレーション）
+      const Z = (S.ipd / 1000) * fpx / ipdPx;
+      lastZraw = Z;
       const mx = (L.x + R.x) / 2 - 0.5, my = (L.y + R.y) / 2 - 0.5;
       let x = mx * vw * Z / fpx, y = -my * vh * Z / fpx;
-      if (!S.mirror) x = -x;                                     // 非ミラー映像では、見る人の右(+X)が画像左に写る
-      eyeRaw.set(x, y + H / 2 + 0.005, Z);                       // インカメラは画面上端中央にあると仮定
+      if (!S.mirror) x = -x;
+      eyeRaw.set(x, y + H / 2 + 0.005, Z);
       faceSeenAt = now;
     }
-  }
-  // 手: 2フレームに1回
-  if (handLM && S.waveDetect && frameNo % 2 === 0) {
-    const hr = handLM.detectForVideo(video, now + 0.5);
-    const h = hr.landmarks?.[0];
-    if (h) {
-      handSeenAt = now;
-      // 手のひらが開いて上を向いている（指先が手首より上）ときだけ手首xを記録
-      const wrist = h[0], tips = [h[8], h[12], h[16]];
-      const up = tips.every(p => p.y < wrist.y - 0.05);
-      if (up) wristHist.push({ t: now, x: wrist.x });
-    }
-    while (wristHist.length && now - wristHist[0].t > 1500) wristHist.shift();
-    if (now - handSeenAt > 400) wristHist.length = 0;
-    // 1.5秒以内に左右の折り返しが2回以上（振幅 4%幅以上）
-    if (wristHist.length >= 6 && now - lastWaveAt > 5000) {
-      let dirn = 0, rev = 0, ext = wristHist[0].x;
-      for (let i = 1; i < wristHist.length; i++) {
-        const d = wristHist[i].x - ext;
-        if (Math.abs(d) < 0.04) continue;
-        const s = Math.sign(d);
-        if (dirn && s !== dirn) rev++;
-        dirn = s; ext = wristHist[i].x;
-      }
-      if (rev >= 2) { lastWaveAt = now; wristHist.length = 0; startWave(); }
+  } else if (now - faceSeenAt > 800) { faceBox = null; }
+  // 手振り検出
+  if (S.waveDetect && frameNo % 2 === 0) {
+    updateMotion(now);
+    if (handLM) {
+      const hr = handLM.detectForVideo(video, now + 0.5);
+      const hd = hr.landmarks?.[0];
+      if (hd) { handSeenAt = now; const wrist = hd[0]; motion.hist.push({ t: now, x: wrist.x }); }
     }
   }
 }
@@ -639,7 +899,7 @@ let tiltSensorDeg = null, motionBound = false;
 function onMotion(e) {
   const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
   const mag = Math.hypot(g.x, g.y, g.z); if (mag < 1) return;
-  const a = Math.acos(Math.min(1, Math.abs(g.z) / mag)) * 180 / Math.PI;  // 画面が水平からどれだけ立っているか
+  const a = Math.acos(Math.min(1, Math.abs(g.z) / mag)) * 180 / Math.PI;
   tiltSensorDeg = tiltSensorDeg == null ? a : tiltSensorDeg * 0.9 + a * 0.1;
 }
 async function enableTilt() {
@@ -662,19 +922,23 @@ function applyProjection() {
   camera.near = n; camera.far = f;
   camera.projectionMatrix.makePerspective(left, right, top, bottom, n, f);
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  camera.updateMatrixWorld();
 }
 
 // ---------- UI ----------
-const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'diag', 'tiltManual', 'frame', 'depth', 'light', 'lightDir', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
-const checks = ['autoSway', 'waveDetect', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe'];
+const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'waveSens', 'diag', 'tiltManual', 'frame', 'depth', 'light', 'lightDir', 'boardSize', 'boardY', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
+const numbers = ['calibDist'];
+const checks = ['autoSway', 'showCam', 'waveDetect', 'useHandModel', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe', 'approach'];
 const selects = ['mode', 'roomStyle', 'clockPlace', 'clockStyle', 'texLimit'];
 const needsRoom = new Set(['diag', 'frame', 'depth', 'roomStyle']);
 const needsLayout = new Set(['clockPlace', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX', 'showAvatar']);
 function showVal(id) { const v = $(id + 'v'); if (v) v.textContent = String(S[id]); }
 function bindUI() {
   for (const id of sliders) { const el = $(id); el.value = S[id]; showVal(id); el.addEventListener('input', () => { S[id] = parseFloat(el.value); showVal(id); onChange(id); }); }
+  for (const id of numbers) { const el = $(id); el.value = S[id]; el.addEventListener('change', () => { S[id] = parseFloat(el.value) || DEF[id]; onChange(id); }); }
   for (const id of checks) { const el = $(id); el.checked = !!S[id]; el.addEventListener('change', () => { S[id] = el.checked; onChange(id); }); }
   for (const id of selects) { const el = $(id); el.value = String(S[id]); el.addEventListener('change', () => { S[id] = el.value; onChange(id); }); }
+  document.body.classList.toggle('showcam', !!S.showCam);
 }
 function onChange(id) {
   save();
@@ -682,15 +946,17 @@ function onChange(id) {
   if (needsLayout.has(id)) layoutObjects();
   if (id === 'clockStyle' || id === 'showDate' || id === 'clockPlace') drawClock(new Date(), true);
   if (id === 'mode') applyMode();
-  if (id === 'waveDetect' && S.mode === 'face') { stopFace(); startFace(); }
+  if (id === 'useHandModel' && S.mode === 'face') { stopFace(); startFace(); }
   if (id === 'useTilt') { if (S.useTilt) enableTilt(); }
+  if (id === 'showCam') document.body.classList.toggle('showcam', !!S.showCam);
   if (id === 'eyeX') { S.autoSway = false; $('autoSway').checked = false; save(); }
-  if (id === 'texLimit') setHud('テクスチャ上限はモデルを次に読み込んだ時から有効です');
+  if (id === 'texLimit') setHud('テクスチャ上限はモデルを次に読み込んだ時から有効です', false, 4000);
+  if (id === 'avatarX' || id === 'avatarZ') walker.reset();
 }
 function applyMode() {
   const face = S.mode === 'face';
-  $('eyeX').style.display = face ? 'none' : '';
-  for (const l of $('bar').querySelectorAll('label')) l.style.display = face ? 'none' : '';
+  $('eyeX').style.display = face ? 'none' : ''; $('lblL').style.display = face ? 'none' : ''; $('lblR').style.display = face ? 'none' : '';
+  $('barSpacer').style.display = face ? '' : 'none';
   if (face) startFace(); else stopFace();
 }
 bindUI();
@@ -700,12 +966,22 @@ $('waveBtn').addEventListener('click', startWave);
 canvas.addEventListener('pointerdown', () => { if ($('panel').classList.contains('open')) { $('panel').classList.remove('open'); return; } document.body.classList.toggle('ui-hidden'); });
 $('resetBtn').addEventListener('click', () => { S = { ...DEF }; save(); location.reload(); });
 $('forgetModel').addEventListener('click', async () => { try { await idb.del('userModel'); } catch (e) {} location.reload(); });
+$('calibBtn').addEventListener('click', () => {
+  if (S.mode !== 'face' || performance.now() - faceSeenAt > 1000) { setHud('顔追跡モードで顔が映っている状態で押してください', true, 4000); return; }
+  S.fScale = S.fScale * (S.calibDist / 100) / Math.max(0.05, lastZraw); save();
+  setHud(`距離を ${S.calibDist}cm に合わせました（倍率 ${S.fScale.toFixed(2)}）`, false, 4000);
+});
 let wakeLock = null;
-$('fsBtn').addEventListener('click', async () => {
-  try { await document.documentElement.requestFullscreen?.(); } catch (e) {}
+async function goFullscreen(hideUi) {
+  try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch (e) {}
+  try { await screen.orientation?.lock?.('portrait'); } catch (e) {}
   try { if (navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (e) {}
   $('panel').classList.remove('open');
-});
+  if (hideUi) document.body.classList.add('ui-hidden');
+}
+$('fsBtn').addEventListener('click', () => goFullscreen(false));
+$('fsBtn2').addEventListener('click', () => goFullscreen(true));
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.body.classList.remove('ui-hidden'); });
 document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && wakeLock) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} } });
 $('modelFile').addEventListener('change', e => { const f = e.target.files?.[0]; if (f) loadUserFile(f); });
 addEventListener('hashchange', () => { if (location.hash === '#perspective') { S.mode = 'slider'; $('mode').value = 'slider'; save(); applyMode(); } });
@@ -716,13 +992,10 @@ addEventListener('resize', onResize);
 
 // ---------- メインループ ----------
 const clock = new THREE.Clock();
-let blinkT = 0, nextBlink = 2;
-const tmpV = new THREE.Vector3(), headPos = new THREE.Vector3();
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(0.1, clock.getDelta()); const t = clock.elapsedTime;
+  const dt = Math.min(0.1, clock.getDelta()); const t = performance.now() / 1000;
 
-  // 視点
   if (S.mode === 'face') {
     updateFace();
     if (performance.now() - faceSeenAt > 1500) eyeRaw.set(0, 0, S.eyeZ / 100);
@@ -733,54 +1006,29 @@ function animate() {
     eye.lerp(eyeRaw, 0.25);
   }
 
-  // 傾き（床を机と水平に）
   let alpha = S.tiltManual;
   if (S.useTilt && tiltSensorDeg != null) alpha = tiltSensorDeg;
   pivot.rotation.x = (90 - alpha) * Math.PI / 180;
 
-  // 照明
+  const st = STYLES[S.roomStyle] || STYLES.wood;
   const ld = S.lightDir * Math.PI / 180;
   dir.position.set(Math.sin(ld) * 0.3, 0.4, Math.cos(ld) * 0.3 - depth / 2); dir.target.position.set(0, 0, -depth / 2);
-  dir.intensity = S.light * Math.PI * 0.6; hemi.intensity = S.light * 0.9;
+  dir.intensity = S.light * Math.PI * 0.6 * (st.lightMul || 1); hemi.intensity = S.light * 0.9 * (st.lightMul || 1);
 
   drawClock(new Date(), false);
 
-  // アバター
+  applyProjection();          // 先に射影を更新（見切れ判定に使う）
   lookTarget.position.copy(eye).multiplyScalar(G);
-  if (vrm) {
-    const h = vrm.humanoid;
-    const head = h?.getNormalizedBoneNode('head'), neck = h?.getNormalizedBoneNode('neck'), spine = h?.getNormalizedBoneNode('spine');
-    if (spine) spine.rotation.x = Math.sin(t * 1.6) * 0.015;
-    applyPose(performance.now() / 1000, dt);
-    if (head && S.lookAtMe) {
-      head.getWorldPosition(headPos); avatarRoot.worldToLocal(headPos);
-      tmpV.copy(eye).multiplyScalar(G); avatarRoot.worldToLocal(tmpV).sub(headPos);
-      const yaw = THREE.MathUtils.clamp(Math.atan2(tmpV.x, tmpV.z), -0.6, 0.6);
-      const pitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.5, 0.5);
-      const k = 1 - Math.exp(-dt * 6);
-      head.rotation.y += (yaw * 0.6 - head.rotation.y) * k; head.rotation.x += (-pitch * 0.6 - head.rotation.x) * k;
-      if (neck) { neck.rotation.y += (yaw * 0.4 - neck.rotation.y) * k; neck.rotation.x += (-pitch * 0.4 - neck.rotation.x) * k; }
-    } else if (head) { head.rotation.set(0, 0, 0); if (neck) neck.rotation.set(0, 0, 0); }
-    blinkT += dt;
-    if (vrm.expressionManager) {
-      let v = 0;
-      if (blinkT > nextBlink) { const p = (blinkT - nextBlink) / 0.18; v = p < 1 ? Math.sin(p * Math.PI) : 0; if (p >= 1) { blinkT = 0; nextBlink = 2 + Math.random() * 4; } }
-      vrm.expressionManager.setValue('blink', v);
-    }
-    vrm.update(dt);
-    avatarRoot.updateMatrixWorld(true);
-    placeBoard();
-  }
+  if (avatarRoot) { updateWalker(dt); updateAvatar(dt, t); }
 
-  applyProjection();
   renderer.render(scene, camera);
 
-  if (!hud.classList.contains('err') && !document.body.classList.contains('ui-hidden')) {
+  if (!hud.classList.contains('err') && !document.body.classList.contains('ui-hidden') && performance.now() > hudHold) {
     const now = performance.now();
     const m = S.mode === 'face'
-      ? (faceLM ? `顔追跡 ${now - faceSeenAt < 1500 ? 'OK' : '顔なし'} ${faceFps}fps${handLM ? (now - handSeenAt < 500 ? ' 手あり' : ' 手なし') : ''}` : '顔追跡 準備中')
+      ? (faceLM ? `顔追跡 ${now - faceSeenAt < 1500 ? 'OK' : '顔なし'} ${faceFps}fps` + (S.waveDetect ? `  動き${(motion.frac * 100).toFixed(1)}% 反転${motion.rev}` : '') + (handLM ? (now - handSeenAt < 500 ? ' 手あり' : ' 手なし') : '') : '顔追跡 準備中')
       : '視点スライダー';
-    setHud(`${m}  目: x${(eye.x * 100).toFixed(0)} y${(eye.y * 100).toFixed(0)} z${(eye.z * 100).toFixed(0)}cm  設置角${alpha.toFixed(0)}°${wave.active ? '  👋' : ''}`);
+    setHud(`${m}\n目: x${(eye.x * 100).toFixed(0)} y${(eye.y * 100).toFixed(0)} z${(eye.z * 100).toFixed(0)}cm  設置角${alpha.toFixed(0)}°${wave.active ? '  👋' : ''}${walker.approaching ? '  →寄る' : ''}`);
   }
 }
 
