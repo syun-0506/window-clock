@@ -92,10 +92,10 @@
   <div class="row"><label>画面の対角(インチ)</label><input id="diag" type="range" min="4" max="13" step="0.1" value="6.5"><span class="val" id="diagv"></span></div>
   <div class="row"><label>傾きセンサーで床を水平に</label><input id="useTilt" type="checkbox"></div>
   <div class="row"><label>設置角 手動(°)</label><input id="tiltManual" type="range" min="30" max="90" step="1" value="90"><span class="val" id="tiltManualv"></span></div>
-  <div class="row"><label>黒枠の幅(mm)</label><input id="frame" type="range" min="0" max="15" step="0.5" value="4"><span class="val" id="framev"></span></div>
+  <div class="row"><label>黒枠の幅(mm)</label><input id="frame" type="range" min="0" max="20" step="0.5" value="6"><span class="val" id="framev"></span></div>
 
   <h2>部屋</h2>
-  <div class="row"><label>奥行き(×画面幅)</label><input id="depth" type="range" min="0.4" max="3" step="0.05" value="1.4"><span class="val" id="depthv"></span></div>
+  <div class="row"><label>奥行き(×画面幅)</label><input id="depth" type="range" min="0.4" max="4" step="0.05" value="2.6"><span class="val" id="depthv"></span></div>
   <div class="row"><label>床・壁</label>
     <select id="roomStyle">
       <option value="wood">木の床・白壁</option>
@@ -103,8 +103,11 @@
       <option value="night">夜の部屋</option>
       <option value="grid">青いグリッド</option>
       <option value="white">真っ白</option>
-      <option value="dark">真っ暗</option>
+      <option value="dark">真っ暗（スポットライト）</option>
     </select></div>
+  <div class="row"><label>影を落とす</label><input id="shadows" type="checkbox" checked></div>
+  <div class="row"><label>台座</label><input id="pedestal" type="checkbox" checked></div>
+  <div class="row"><label>窓枠の厚み(mm)</label><input id="reveal" type="range" min="0" max="20" step="1" value="8"><span class="val" id="revealv"></span></div>
   <div class="row"><label>照明の強さ</label><input id="light" type="range" min="0.2" max="3" step="0.05" value="1"><span class="val" id="lightv"></span></div>
   <div class="row"><label>照明の向き(°)</label><input id="lightDir" type="range" min="-180" max="180" step="5" value="-40"><span class="val" id="lightDirv"></span></div>
 
@@ -122,8 +125,8 @@
       <option value="minimal">Minimal</option>
     </select></div>
   <div class="row"><label>日付を表示</label><input id="showDate" type="checkbox" checked></div>
-  <div class="row"><label>ボードの幅(×身長)</label><input id="boardSize" type="range" min="0.12" max="0.3" step="0.01" value="0.2"><span class="val" id="boardSizev"></span></div>
-  <div class="row"><label>ボードの高さ位置</label><input id="boardY" type="range" min="-0.3" max="0.1" step="0.01" value="-0.14"><span class="val" id="boardYv"></span></div>
+  <div class="row"><label>ボードの幅(×身長)</label><input id="boardSize" type="range" min="0.12" max="0.5" step="0.01" value="0.32"><span class="val" id="boardSizev"></span></div>
+  <div class="row"><label>ボードの高さ位置</label><input id="boardY" type="range" min="-0.3" max="0.1" step="0.01" value="-0.12"><span class="val" id="boardYv"></span></div>
   <div class="row"><label>（空中）大きさ</label><input id="clockSize" type="range" min="0.2" max="1" step="0.02" value="0.5"><span class="val" id="clockSizev"></span></div>
   <div class="row"><label>（空中）前後</label><input id="clockZ" type="range" min="-1" max="0.3" step="0.02" value="-0.5"><span class="val" id="clockZv"></span></div>
   <div class="row"><label>（空中）高さ</label><input id="clockY" type="range" min="0" max="1" step="0.02" value="0.76"><span class="val" id="clockYv"></span></div>
@@ -131,8 +134,8 @@
 
   <h2>アバター</h2>
   <div class="row"><label>表示</label><input id="showAvatar" type="checkbox" checked></div>
-  <div class="row"><label>身長(×部屋の高さ)</label><input id="avatarH" type="range" min="0.3" max="1.1" step="0.02" value="0.74"><span class="val" id="avatarHv"></span></div>
-  <div class="row"><label>前後位置</label><input id="avatarZ" type="range" min="-1" max="0.2" step="0.02" value="-0.5"><span class="val" id="avatarZv"></span></div>
+  <div class="row"><label>身長(×部屋の高さ)</label><input id="avatarH" type="range" min="0.3" max="1.1" step="0.02" value="0.5"><span class="val" id="avatarHv"></span></div>
+  <div class="row"><label>前後位置</label><input id="avatarZ" type="range" min="-1" max="0.2" step="0.02" value="-0.62"><span class="val" id="avatarZv"></span></div>
   <div class="row"><label>左右</label><input id="avatarX" type="range" min="-0.5" max="0.5" step="0.02" value="0"><span class="val" id="avatarXv"></span></div>
   <div class="row"><label>視線を向ける</label><input id="lookAtMe" type="checkbox" checked></div>
   <div class="row"><label>見切れそうなら寄ってくる</label><input id="approach" type="checkbox" checked></div>
@@ -162,13 +165,20 @@ const DEF = {
   mode: 'slider', autoSway: true, eyeX: 0, eyeY: 0, eyeZ: 55,
   showCam: false, mirror: false, calibDist: 50, fScale: 1, hfov: 65, ipd: 63, smooth: 0.3,
   waveDetect: true, waveSens: 1, useHandModel: false,
-  diag: 6.5, useTilt: false, tiltManual: 90, frame: 4,
-  depth: 1.4, roomStyle: 'wood', light: 1, lightDir: -40,
-  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.2, boardY: -0.14, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
-  showAvatar: true, avatarH: 0.74, avatarZ: -0.5, avatarX: 0, lookAtMe: true, approach: true, texLimit: '1024',
+  diag: 6.5, useTilt: false, tiltManual: 90, frame: 6, reveal: 8,
+  depth: 2.6, roomStyle: 'wood', light: 1, lightDir: -40, shadows: true, pedestal: true, ver: 4,
+  clockPlace: 'board', clockStyle: 'digital', showDate: true, boardSize: 0.32, boardY: -0.12, clockSize: 0.5, clockZ: -0.5, clockY: 0.76, clockX: 0.2,
+  showAvatar: true, avatarH: 0.5, avatarZ: -0.62, avatarX: 0, lookAtMe: true, approach: true, texLimit: '1024',
 };
 let S = { ...DEF };
-try { const s = localStorage.getItem('win3d-settings'); if (s) S = { ...DEF, ...JSON.parse(s) }; } catch (e) {}
+try {
+  const s = localStorage.getItem('win3d-settings');
+  if (s) {
+    const saved = JSON.parse(s); S = { ...DEF, ...saved };
+    // v3: 奥行き感のための既定値変更（古い保存値を上書き）
+    if (!saved.ver || saved.ver < 4) { S.frame = DEF.frame; S.depth = DEF.depth; S.avatarZ = DEF.avatarZ; S.avatarH = DEF.avatarH; S.boardSize = DEF.boardSize; S.boardY = DEF.boardY; S.ver = 4; }
+  }
+} catch (e) {}
 if (location.hash === '#perspective') S.mode = 'slider';
 function save() { try { localStorage.setItem('win3d-settings', JSON.stringify(S)); } catch (e) {} }
 
@@ -203,6 +213,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.localClippingEnabled = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
@@ -214,7 +226,9 @@ const pivot = new THREE.Group(); scene.add(pivot);
 const world = new THREE.Group(); pivot.add(world);
 let roomGroup = null, frameMesh = null;
 const hemi = new THREE.HemisphereLight(0xffffff, 0x667788, 1.0); world.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 1.0); world.add(dir); world.add(dir.target);
+// 影用の平行光はシーン直下に置く（pivot の倍率 G の影響をシャドウカメラに持ち込まないため）
+const dir = new THREE.DirectionalLight(0xffffff, 1.0); scene.add(dir); scene.add(dir.target);
+dir.castShadow = true; dir.shadow.mapSize.set(1024, 1024); dir.shadow.bias = -0.0005; dir.shadow.normalBias = 0.02;
 // シーン全体の倍率。アバターのワールドスケールを 1（実寸 m）に保つため、部屋・画面・目の座標側を G 倍する
 let G = 1;
 
@@ -279,15 +293,36 @@ const STYLES = {
     hemi: [0xffffff, 0x224488], sun: 0xffffff, shadow: 0.5,
   },
   // 真っ白/真っ暗は照明の影響を受けない unlit で塗りつぶす
-  white: { floor: solid('#ffffff'), wall: solid('#ffffff'), back: solid('#ffffff'), ceil: solid('#ffffff'), hemi: [0xffffff, 0xdddddd], sun: 0xffffff, shadow: 0.15, unlit: true },
-  dark: { floor: solid('#000000'), wall: solid('#000000'), back: solid('#000000'), ceil: solid('#000000'), hemi: [0xffffff, 0x333344], sun: 0xffffff, shadow: 0.0, unlit: true },
+  white: { floor: solid('#f6f6f6'), wall: solid('#fcfcfc'), back: solid('#ffffff'), ceil: solid('#ffffff'), hemi: [0xffffff, 0xdddddd], sun: 0xffffff, shadow: 0.15, unlit: true, shadowOverlay: 0.22, shadeAmount: 0.16 },
+  dark: {
+    // 床だけスポットライトの明かりを残す（完全な黒だと奥行きの手掛かりが消える）
+    floor: () => makeTex(512, 512, (c, w, h) => { const g = c.createRadialGradient(w / 2, h * 0.35, 10, w / 2, h * 0.35, w * 0.6); g.addColorStop(0, '#3a3a46'); g.addColorStop(0.5, '#15151c'); g.addColorStop(1, '#050507'); c.fillStyle = g; c.fillRect(0, 0, w, h); }),
+    wall: () => makeTex(256, 256, (c, w, h) => { const g = c.createLinearGradient(0, h, 0, 0); g.addColorStop(0, '#111116'); g.addColorStop(1, '#030304'); c.fillStyle = g; c.fillRect(0, 0, w, h); }),
+    back: solid('#040406'), ceil: solid('#000000'), hemi: [0xffffff, 0x333344], sun: 0xffffff, shadow: 0.0, unlit: true, shadowOverlay: 0.75, shadeAmount: 0.3,
+  },
 };
+// 陰影用テクスチャ（アルファ勾配）。PlaneGeometry の +Y 側（床では奥）が濃い
+let _shadeDepth = null, _shadeVig = null;
+function shadeTexDepth() {
+  if (_shadeDepth) return _shadeDepth;
+  const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256; const c = cv.getContext('2d');
+  const g = c.createLinearGradient(0, 256, 0, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.55, 'rgba(0,0,0,0.35)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+  c.fillStyle = g; c.fillRect(0, 0, 4, 256);
+  _shadeDepth = new THREE.CanvasTexture(cv); _shadeDepth.colorSpace = THREE.SRGBColorSpace; return _shadeDepth;
+}
+function shadeTexVignette() {
+  if (_shadeVig) return _shadeVig;
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const c = cv.getContext('2d');
+  const g = c.createRadialGradient(128, 110, 20, 128, 128, 180); g.addColorStop(0, 'rgba(0,0,0,0.25)'); g.addColorStop(0.6, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+  c.fillStyle = g; c.fillRect(0, 0, 256, 256);
+  _shadeVig = new THREE.CanvasTexture(cv); _shadeVig.colorSpace = THREE.SRGBColorSpace; return _shadeVig;
+}
 const texCache = {};
 function styleTex(style, key) { const k = style + ':' + key; if (!texCache[k]) texCache[k] = STYLES[style][key](); return texCache[k]; }
 
 // ---------- 部屋の構築 ----------
 let depth = 0.1, Hr = 0.15;
-let blobShadow = null;
+let blobShadow = null, pedestal = null, pedH = 0, pedR = 0;
 function buildRoom() {
   if (roomGroup) { world.remove(roomGroup); roomGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   if (frameMesh) { scene.remove(frameMesh); frameMesh.geometry.dispose(); }
@@ -297,14 +332,51 @@ function buildRoom() {
     ? new THREE.MeshBasicMaterial({ map: styleTex(S.roomStyle, key), clippingPlanes: [glassClip] })
     : new THREE.MeshStandardMaterial({ map: styleTex(S.roomStyle, key), roughness: 0.9, metalness: 0, clippingPlanes: [glassClip] });
   roomGroup = new THREE.Group();
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('floor')); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, -depth / 2);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(Wi, depth), mat('ceil')); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, Hr, -depth / 2);
+  const rv = Math.min(S.reveal / 1000, depth * 0.3);  // 窓枠の厚み（開口からこの分だけ奥へ）
+  const dz = depth - rv;                               // 部屋本体の奥行き
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), mat('floor')); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, -rv - dz / 2);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), mat('ceil')); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, Hr, -rv - dz / 2);
   const back = new THREE.Mesh(new THREE.PlaneGeometry(Wi, Hr), mat('back')); back.position.set(0, Hr / 2, -depth);
-  const left = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); left.rotation.y = Math.PI / 2; left.position.set(-Wi / 2, Hr / 2, -depth / 2);
-  const right = new THREE.Mesh(new THREE.PlaneGeometry(depth, Hr), mat('wall')); right.rotation.y = -Math.PI / 2; right.position.set(Wi / 2, Hr / 2, -depth / 2);
+  const left = new THREE.Mesh(new THREE.PlaneGeometry(dz, Hr), mat('wall')); left.rotation.y = Math.PI / 2; left.position.set(-Wi / 2, Hr / 2, -rv - dz / 2);
+  const right = new THREE.Mesh(new THREE.PlaneGeometry(dz, Hr), mat('wall')); right.rotation.y = -Math.PI / 2; right.position.set(Wi / 2, Hr / 2, -rv - dz / 2);
   roomGroup.add(floor, ceil, back, left, right);
+  for (const m of [floor, ceil, back, left, right]) m.receiveShadow = !st.unlit && S.shadows;
+  // 奥へ行くほど暗くなる陰影を半透明で重ねる（空気遠近・コーナーの陰。平面的に見えるのを防ぐ）
+  const shadeA = st.shadeAmount ?? 0.45;
+  if (shadeA > 0) {
+    const sm = new THREE.MeshBasicMaterial({ map: shadeTexDepth(), transparent: true, depthWrite: false, color: 0x000000, opacity: shadeA, clippingPlanes: [glassClip] });
+    const vm = new THREE.MeshBasicMaterial({ map: shadeTexVignette(), transparent: true, depthWrite: false, color: 0x000000, opacity: shadeA * 0.9, clippingPlanes: [glassClip] });
+    const o1 = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), sm); o1.rotation.x = -Math.PI / 2; o1.position.set(0, 0.0002, -rv - dz / 2);
+    const o2 = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), sm); o2.rotation.x = Math.PI / 2; o2.rotation.z = Math.PI; o2.position.set(0, Hr - 0.0002, -rv - dz / 2);
+    const o3 = new THREE.Mesh(new THREE.PlaneGeometry(Hr, dz), sm); o3.rotation.y = Math.PI / 2; o3.rotation.z = -Math.PI / 2; o3.position.set(-Wi / 2 + 0.0002, Hr / 2, -rv - dz / 2);
+    const o4 = new THREE.Mesh(new THREE.PlaneGeometry(Hr, dz), sm); o4.rotation.y = -Math.PI / 2; o4.rotation.z = Math.PI / 2; o4.position.set(Wi / 2 - 0.0002, Hr / 2, -rv - dz / 2);
+    const o5 = new THREE.Mesh(new THREE.PlaneGeometry(Wi, Hr), vm); o5.position.set(0, Hr / 2, -depth + 0.0002);
+    o1.renderOrder = o2.renderOrder = o3.renderOrder = o4.renderOrder = o5.renderOrder = 1;
+    roomGroup.add(o1, o2, o3, o4, o5);
+  }
+  // 窓枠の内側面（枠に厚みがあるように見せる。視点を動かすと見え隠れして奥行きの手掛かりになる）
+  if (rv > 0.0005) {
+    const rm = st.unlit ? new THREE.MeshBasicMaterial({ color: 0x1c1c1c, clippingPlanes: [glassClip] }) : new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.85, clippingPlanes: [glassClip] });
+    const rb = new THREE.Mesh(new THREE.PlaneGeometry(Wi, rv), rm); rb.rotation.x = -Math.PI / 2; rb.position.set(0, 0.0001, -rv / 2);
+    const rt = new THREE.Mesh(new THREE.PlaneGeometry(Wi, rv), rm); rt.rotation.x = Math.PI / 2; rt.position.set(0, Hi, -rv / 2);
+    const rl = new THREE.Mesh(new THREE.PlaneGeometry(rv, Hi), rm); rl.rotation.y = Math.PI / 2; rl.position.set(-Wi / 2 + 0.0001, Hi / 2, -rv / 2);
+    const rr = new THREE.Mesh(new THREE.PlaneGeometry(rv, Hi), rm); rr.rotation.y = -Math.PI / 2; rr.position.set(Wi / 2 - 0.0001, Hi / 2, -rv / 2);
+    const lintel = new THREE.Mesh(new THREE.PlaneGeometry(Wi, Hr - Hi), rm); lintel.position.set(0, (Hi + Hr) / 2, -rv); // 窓上の壁
+    roomGroup.add(rb, rt, rl, rr, lintel);
+  }
+  // unlit の部屋では床に影だけ落とす透明マテリアルを重ねる
+  if (st.unlit && S.shadows && st.shadowOverlay > 0) {
+    const so = new THREE.Mesh(new THREE.PlaneGeometry(Wi, dz), new THREE.ShadowMaterial({ opacity: st.shadowOverlay, clippingPlanes: [glassClip] }));
+    so.rotation.x = -Math.PI / 2; so.position.set(0, 0.0003, -rv - dz / 2); so.receiveShadow = true; roomGroup.add(so);
+  }
+  // 台座（参考アプリ同様。楕円の見え方と影が奥行きの手掛かりになる）
+  pedestal = null;
+  if (S.pedestal) {
+    pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48), new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.45, metalness: 0.35, clippingPlanes: [glassClip] }));
+    pedestal.castShadow = S.shadows; pedestal.receiveShadow = S.shadows; roomGroup.add(pedestal);
+  }
   blobShadow = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: st.shadow, depthWrite: false }));
-  blobShadow.rotation.x = -Math.PI / 2; blobShadow.visible = st.shadow > 0; roomGroup.add(blobShadow);
+  blobShadow.rotation.x = -Math.PI / 2; blobShadow.visible = st.shadow > 0 && !S.shadows; roomGroup.add(blobShadow);
   world.add(roomGroup);
 
   const shape = new THREE.Shape(); shape.moveTo(-W / 2, -H / 2); shape.lineTo(W / 2, -H / 2); shape.lineTo(W / 2, H / 2); shape.lineTo(-W / 2, H / 2); shape.closePath();
@@ -328,7 +400,7 @@ const board = new THREE.Group();
 const boardBack = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.8, side: THREE.DoubleSide }));
 const boardEdge = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8, side: THREE.DoubleSide }));
 const boardFace = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), clockMat); boardFace.renderOrder = 2;
-boardEdge.position.z = 0.0015; boardFace.position.z = 0.003;
+boardEdge.position.z = 0.0015; boardFace.position.z = 0.003; boardBack.castShadow = true;
 board.add(boardBack, boardEdge, boardFace);
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -452,7 +524,7 @@ async function loadModelBuffer(buf, label) {
     VRMUtils.combineMorphs(vrm);
     VRMUtils.rotateVRM0(vrm);
     avatarRoot = vrm.scene;
-    vrm.scene.traverse(o => { o.frustumCulled = false; });
+    vrm.scene.traverse(o => { o.frustumCulled = false; if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
     if (vrm.lookAt) { vrm.lookAt.target = lookTarget; vrm.lookAt.autoUpdate = true; }
     const meta = vrm.meta || {};
     const credit = meta.metaVersion === '1'
@@ -507,6 +579,9 @@ function layoutObjects() {
     avatarRoot.scale.setScalar(avatarScale);
     avatarRoot.visible = S.showAvatar;
     walker.home.set(S.avatarX * Wi, S.avatarZ * depth);
+    const ah = avatarNativeHeight * avatarScale;         // 部屋単位での身長
+    pedR = ah * 0.26; pedH = S.pedestal ? ah * 0.035 : 0;
+    if (pedestal) { pedestal.scale.set(pedR, Math.max(pedH, 0.0001), pedR); pedestal.position.set(walker.home.x, pedH / 2, walker.home.y); }
     // ボード寸法（アバター実寸 m）
     const bw = avatarNativeHeight * S.boardSize, bh = bw / 2;
     boardBack.scale.set(bw, bh, 1); boardEdge.scale.set(bw * 0.965, bh * 0.93, 1); boardFace.scale.set(bw * 0.84, bh * 0.86, 1);
@@ -514,6 +589,11 @@ function layoutObjects() {
   } else { G = 1; }
   pivot.scale.setScalar(G); pivot.position.set(0, -Hi / 2 * G, 0);
   if (frameMesh) frameMesh.scale.setScalar(G);
+  // シャドウカメラ（シーン単位 = 部屋単位 × G）
+  const sz = Math.max(Wi, depth, Hr) * G;
+  const sc = dir.shadow.camera;
+  sc.left = -sz * 0.8; sc.right = sz * 0.8; sc.top = sz * 0.8; sc.bottom = -sz * 0.8; sc.near = sz * 0.2; sc.far = sz * 5; sc.updateProjectionMatrix();
+  dir.castShadow = S.shadows;
 }
 
 // ---------- ポーズ：2ボーンIK（アバターのローカル座標、実寸 m） ----------
@@ -666,7 +746,10 @@ function updateWalker(dt) {
     if (!moving) { lu.rotation.set(0, 0, 0); ru.rotation.set(0, 0, 0); if (ll) ll.rotation.set(0, 0, 0); if (rl) rl.rotation.set(0, 0, 0); }
   }
   const bob = Math.abs(Math.sin(walker.phase)) * 0.018 * moving * avatarScale;
-  avatarRoot.position.set(walker.pos.x, -avatarRoot.userData.minY * avatarScale + bob, walker.pos.y);
+  // 台座の上にいる分だけ持ち上げる（台座の縁で滑らかに降りる）
+  const dHome = Math.hypot(walker.pos.x - walker.home.x, walker.pos.y - walker.home.y);
+  const onPed = pedH > 0 ? 1 - THREE.MathUtils.smoothstep(dHome, pedR * 0.7, pedR * 1.05) : 0;
+  avatarRoot.position.set(walker.pos.x, -avatarRoot.userData.minY * avatarScale + bob + pedH * onPed, walker.pos.y);
   avatarRoot.rotation.set(0, walker.yaw, 0);
   if (blobShadow) { blobShadow.position.set(walker.pos.x, 0.0003, walker.pos.y); blobShadow.scale.setScalar(avatarNativeHeight * avatarScale * 0.14); blobShadow.visible = S.showAvatar && blobShadow.material.opacity > 0; }
 }
@@ -926,11 +1009,11 @@ function applyProjection() {
 }
 
 // ---------- UI ----------
-const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'waveSens', 'diag', 'tiltManual', 'frame', 'depth', 'light', 'lightDir', 'boardSize', 'boardY', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
+const sliders = ['eyeX', 'eyeY', 'eyeZ', 'hfov', 'ipd', 'smooth', 'waveSens', 'diag', 'tiltManual', 'frame', 'reveal', 'depth', 'light', 'lightDir', 'boardSize', 'boardY', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX'];
 const numbers = ['calibDist'];
-const checks = ['autoSway', 'showCam', 'waveDetect', 'useHandModel', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe', 'approach'];
+const checks = ['autoSway', 'showCam', 'waveDetect', 'useHandModel', 'mirror', 'useTilt', 'showDate', 'showAvatar', 'lookAtMe', 'approach', 'shadows', 'pedestal'];
 const selects = ['mode', 'roomStyle', 'clockPlace', 'clockStyle', 'texLimit'];
-const needsRoom = new Set(['diag', 'frame', 'depth', 'roomStyle']);
+const needsRoom = new Set(['diag', 'frame', 'reveal', 'depth', 'roomStyle', 'shadows', 'pedestal']);
 const needsLayout = new Set(['clockPlace', 'boardSize', 'clockSize', 'clockZ', 'clockY', 'clockX', 'avatarH', 'avatarZ', 'avatarX', 'showAvatar']);
 function showVal(id) { const v = $(id + 'v'); if (v) v.textContent = String(S[id]); }
 function bindUI() {
@@ -1012,7 +1095,12 @@ function animate() {
 
   const st = STYLES[S.roomStyle] || STYLES.wood;
   const ld = S.lightDir * Math.PI / 180;
-  dir.position.set(Math.sin(ld) * 0.3, 0.4, Math.cos(ld) * 0.3 - depth / 2); dir.target.position.set(0, 0, -depth / 2);
+  {
+    const sz = Math.max(Wi, depth, Hr);
+    _v1.set(Math.sin(ld) * 0.6, 0.95, Math.cos(ld) * 0.6).normalize().multiplyScalar(sz * 2.2).add(_v2.set(0, 0, -depth / 2));
+    world.localToWorld(_v1); dir.position.copy(_v1);
+    world.localToWorld(_v2.set(0, 0, -depth / 2)); dir.target.position.copy(_v2);
+  }
   dir.intensity = S.light * Math.PI * 0.6 * (st.lightMul || 1); hemi.intensity = S.light * 0.9 * (st.lightMul || 1);
 
   drawClock(new Date(), false);
